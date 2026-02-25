@@ -6,6 +6,7 @@
 
 - Регистрация и вход пользователей (`/register`, `/login` + API `/auth/*`)
 - Главная страница создания комнаты и входа по PIN
+- Отдельная страница профиля со статистикой игрока (`/profile`)
 - Уникальный PIN (6 символов, буквы + цифры)
 - Хранение игр/игроков/вопросов/пользователей в SQLite
 - Лобби с разделением на 2 команды (A/B)
@@ -45,6 +46,7 @@ export GIGACHAT_VERIFY_SSL="false"
 
 - `POST /auth/register`
 - `POST /auth/login`
+- `GET /users/{user_id}/stats`
 - `POST /games`
 - `POST /games/{pin}/join`
 - `POST /games/{pin}/start`
@@ -64,12 +66,14 @@ app/
     register.html
     index.html
     game.html
+    profile.html
   static/
     css/style.css
     js/login.js
     js/register.js
     js/index.js
     js/game.js
+    js/profile.js
   services/
     auth_service.py
     ai_service.py

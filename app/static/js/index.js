@@ -28,6 +28,7 @@ document.getElementById('create-form')?.addEventListener('submit', async (e) => 
   const form = e.currentTarget;
   const payload = Object.fromEntries(new FormData(form).entries());
   payload.questions_per_team = Number(payload.questions_per_team);
+  payload.user_id = user?.user_id ?? null;
 
   try {
     const res = await fetch('/games', {
@@ -61,7 +62,7 @@ document.getElementById('join-form')?.addEventListener('submit', async (e) => {
     const res = await fetch(`/games/${pin}/join`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name: formData.name}),
+      body: JSON.stringify({name: formData.name, user_id: user?.user_id ?? null}),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Ошибка подключения');

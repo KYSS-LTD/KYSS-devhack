@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuizBattle — Профиль</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Профиль игрока</h1>
+    <div class="top-actions">
+      <a href="/" class="secondary btn-link">Главная</a>
+      <button id="logout-btn" class="secondary">Выйти</button>
+    </div>
+  </header>
+
+  <main class="game-layout stack">
+    <section class="card">
+      <h2 id="profile-username">...</h2>
+      <p class="muted">Здесь собрана статистика твоих игр.</p>
+    </section>
+
+    <section class="grid-3">
+      <article class="card"><h3>Сыграно игр</h3><p id="games-played" class="big-number">0</p></article>
+      <article class="card"><h3>Завершено игр</h3><p id="games-finished" class="big-number">0</p></article>
+      <article class="card"><h3>Побед</h3><p id="wins" class="big-number">0</p></article>
+      <article class="card"><h3>Winrate</h3><p id="win-rate" class="big-number">0%</p></article>
+      <article class="card"><h3>Средний счёт команды</h3><p id="avg-score" class="big-number">0</p></article>
+      <article class="card"><h3>Любимая команда</h3><p id="favorite-team" class="big-number">-</p></article>
+    </section>
+
+    <section class="grid-2">
+      <article class="card">
+        <h3>Последние темы игр</h3>
+        <ul id="recent-topics"></ul>
+      </article>
+      <article class="card">
+        <h3>Чаще всего играл с</h3>
+        <ul id="teammates"></ul>
+      </article>
+    </section>
+
+    <p id="profile-msg" class="status"></p>
+  </main>
+
+  <script src="/static/js/profile.js"></script>
+</body>
+</html>

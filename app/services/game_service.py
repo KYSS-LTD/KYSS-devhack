@@ -1,14 +1,14 @@
 import asyncio
 import random
 import string
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 from fastapi import HTTPException, WebSocket
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Game, Player, Question
-from app.schemas import GameStateOut, PlayerOut, QuestionPublic
+from app.schemas import GameStateOut, PlayerOut, QuestionPublic, TeammateStat, UserProfileStatsResponse
 from app.services.ai_service import generate_questions
 
 QUESTION_TIMEOUT_SECONDS = 30
@@ -50,30 +50,31 @@ class GameService:
             if not existing:
                 return pin
 
-    def create_game(self, db: Session, host_name: str, topic: str, questions_per_team: int) -> tuple[Game, Player]:
+    def create_game(self, db: Session, host_name: str, topic: str, questions_per_team: int, user_id: int | None) -> tuple[Game, Player]:
         pin = self.generate_pin(db)
         game = Game(pin=pin, topic=topic, questions_per_team=questions_per_team, status="waiting")
         db.add(game)
         db.flush()
 
-        host = Player(game_id=game.id, name=host_name, team="A", is_host=True)
+        host = Player(game_id=game.id, user_id=user_id, name=host_name, team="A", is_host=True, active=True)
         db.add(host)
 
         for team in ("A", "B"):
             generated = generate_questions(topic, questions_per_team)
             for idx, q in enumerate(generated):
-                question = Question(
-                    game_id=game.id,
-                    team=team,
-                    order_index=idx,
-                    text=q["text"],
-                    option_1=q["options"][0],
-                    option_2=q["options"][1],
-                    option_3=q["options"][2],
-                    option_4=q["options"][3],
-                    correct_option=q["correct_option"],
+                db.add(
+                    Question(
+                        game_id=game.id,
+                        team=team,
+                        order_index=idx,
+                        text=q["text"],
+                        option_1=q["options"][0],
+                        option_2=q["options"][1],
+                        option_3=q["options"][2],
+                        option_4=q["options"][3],
+                        correct_option=q["correct_option"],
+                    )
                 )
-                db.add(question)
 
         db.commit()
         db.refresh(game)
@@ -81,21 +82,26 @@ class GameService:
         return game, host
 
     def rebalance_teams(self, db: Session, game: Game) -> None:
-        players = db.query(Player).filter(Player.game_id == game.id).order_by(Player.joined_at.asc()).all()
+        players = (
+            db.query(Player)
+            .filter(Player.game_id == game.id, Player.active.is_(True))
+            .order_by(Player.joined_at.asc())
+            .all()
+        )
         shuffled = players[:]
         random.shuffle(shuffled)
         for idx, player in enumerate(shuffled):
             player.team = "A" if idx % 2 == 0 else "B"
         db.commit()
 
-    def join_game(self, db: Session, pin: str, name: str) -> Player:
+    def join_game(self, db: Session, pin: str, name: str, user_id: int | None) -> Player:
         game = db.query(Game).filter(Game.pin == pin).first()
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
         if game.status != "waiting":
             raise HTTPException(status_code=400, detail="Game already started")
 
-        player = Player(game_id=game.id, name=name, team="A", is_host=False)
+        player = Player(game_id=game.id, user_id=user_id, name=name, team="A", is_host=False, active=True)
         db.add(player)
         db.commit()
         db.refresh(player)
@@ -114,29 +120,24 @@ class GameService:
         if game.status != "in_progress" or not game.current_team:
             return None
         index = game.current_index_a if game.current_team == "A" else game.current_index_b
-        question = (
+        return (
             db.query(Question)
-            .filter(
-                Question.game_id == game.id,
-                Question.team == game.current_team,
-                Question.order_index == index,
-            )
+            .filter(Question.game_id == game.id, Question.team == game.current_team, Question.order_index == index)
             .first()
         )
-        return question
 
     def to_state(self, db: Session, game: Game) -> GameStateOut:
-        players = db.query(Player).filter(Player.game_id == game.id).order_by(Player.joined_at.asc()).all()
+        players = (
+            db.query(Player)
+            .filter(Player.game_id == game.id, Player.active.is_(True))
+            .order_by(Player.joined_at.asc())
+            .all()
+        )
         current_question = self.get_current_question(db, game)
 
         winner = None
         if game.status == "finished":
-            if game.score_a > game.score_b:
-                winner = "A"
-            elif game.score_b > game.score_a:
-                winner = "B"
-            else:
-                winner = "draw"
+            winner = "A" if game.score_a > game.score_b else "B" if game.score_b > game.score_a else "draw"
 
         return GameStateOut(
             pin=game.pin,
@@ -151,12 +152,7 @@ class GameService:
                 team=current_question.team,
                 order_index=current_question.order_index,
                 text=current_question.text,
-                options=[
-                    current_question.option_1,
-                    current_question.option_2,
-                    current_question.option_3,
-                    current_question.option_4,
-                ],
+                options=[current_question.option_1, current_question.option_2, current_question.option_3, current_question.option_4],
             )
             if current_question
             else None,
@@ -164,12 +160,75 @@ class GameService:
             winner=winner,
         )
 
+    def get_user_stats(self, db: Session, user_id: int, username: str) -> UserProfileStatsResponse:
+        player_rows = db.query(Player).filter(Player.user_id == user_id).all()
+        game_ids = sorted({p.game_id for p in player_rows})
+        if not game_ids:
+            return UserProfileStatsResponse(
+                username=username,
+                games_played=0,
+                games_finished=0,
+                wins=0,
+                win_rate=0.0,
+                average_team_score=0.0,
+                recent_topics=[],
+                favorite_team=None,
+                frequent_teammates=[],
+            )
+
+        games = db.query(Game).filter(Game.id.in_(game_ids)).order_by(Game.created_at.desc()).all()
+        by_game = {p.game_id: p for p in player_rows}
+
+        wins = 0
+        finished = 0
+        team_scores: list[int] = []
+        teams = Counter()
+        teammate_counter = Counter()
+
+        for game in games:
+            me = by_game.get(game.id)
+            if not me:
+                continue
+            teams[me.team] += 1
+            if me.team == "A":
+                team_scores.append(game.score_a)
+            else:
+                team_scores.append(game.score_b)
+            if game.status == "finished":
+                finished += 1
+                if (me.team == "A" and game.score_a > game.score_b) or (me.team == "B" and game.score_b > game.score_a):
+                    wins += 1
+
+            teammates = (
+                db.query(Player)
+                .filter(Player.game_id == game.id, Player.id != me.id, Player.team == me.team)
+                .all()
+            )
+            for t in teammates:
+                teammate_counter[t.name] += 1
+
+        games_played = len(game_ids)
+        favorite_team = teams.most_common(1)[0][0] if teams else None
+        frequent = [TeammateStat(name=name, games_together=count) for name, count in teammate_counter.most_common(5)]
+
+        return UserProfileStatsResponse(
+            username=username,
+            games_played=games_played,
+            games_finished=finished,
+            wins=wins,
+            win_rate=round((wins / finished * 100.0), 1) if finished else 0.0,
+            average_team_score=round(sum(team_scores) / len(team_scores), 2) if team_scores else 0.0,
+            recent_topics=[g.topic for g in games[:5]],
+            favorite_team=favorite_team,
+            frequent_teammates=frequent,
+        )
+
     async def broadcast_state(self, db: Session, game: Game) -> None:
         await self.manager.broadcast(game.pin, {"type": "state", "data": self.to_state(db, game).model_dump()})
 
     async def start_game(self, db: Session, pin: str, host_player_id: int) -> Game:
         game = self.get_game(db, pin)
-        host = db.query(Player).filter(Player.id == host_player_id, Player.game_id == game.id).first()
+        host = db.query(Player).filter(Player.id == host_player_id, Player.game_id == game.id, Player.active.is_(True)).first()
         if not host or not host.is_host:
             raise HTTPException(status_code=403, detail="Only host can start game")
         if game.status != "waiting":
@@ -207,14 +266,7 @@ class GameService:
 
         self.timer_tasks[pin] = asyncio.create_task(timer_coroutine())
 
-    async def process_answer(
-        self,
-        db: Session,
-        pin: str,
-        player_id: int | None,
-        option_index: int | None,
-        timeout: bool = False,
-    ) -> None:
+    async def process_answer(self, db: Session, pin: str, player_id: int | None, option_index: int | None, timeout: bool = False) -> None:
         game = self.get_game(db, pin)
         if game.status != "in_progress":
             return
@@ -224,7 +276,7 @@ class GameService:
             return
 
         if not timeout:
-            player = db.query(Player).filter(Player.id == player_id, Player.game_id == game.id).first()
+            player = db.query(Player).filter(Player.id == player_id, Player.game_id == game.id, Player.active.is_(True)).first()
             if not player:
                 raise HTTPException(status_code=404, detail="Player not found")
             if player.team != game.current_team:
@@ -279,11 +331,12 @@ class GameService:
         player = db.query(Player).filter(Player.id == player_id, Player.game_id == game.id).first()
         if not player:
             return
-        db.delete(player)
+
+        player.active = False
         db.commit()
 
-        players_left = db.query(Player).filter(Player.game_id == game.id).count()
-        if players_left == 0:
+        active_players_left = db.query(Player).filter(Player.game_id == game.id, Player.active.is_(True)).count()
+        if active_players_left == 0:
             game.status = "finished"
             game.current_team = None
             db.commit()

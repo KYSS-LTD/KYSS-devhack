@@ -20,10 +20,12 @@ class CreateGameRequest(BaseModel):
     host_name: str = Field(min_length=1, max_length=80)
     topic: str = Field(min_length=2, max_length=255)
     questions_per_team: int = Field(ge=5, le=7)
+    user_id: int | None = None
 
 
 class JoinGameRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
+    user_id: int | None = None
 
 
 class StartGameRequest(BaseModel):
@@ -67,3 +69,20 @@ class CreateGameResponse(BaseModel):
 class JoinGameResponse(BaseModel):
     player_id: int
     state: GameStateOut
+
+
+class TeammateStat(BaseModel):
+    name: str
+    games_together: int
+
+
+class UserProfileStatsResponse(BaseModel):
+    username: str
+    games_played: int
+    games_finished: int
+    wins: int
+    win_rate: float
+    average_team_score: float
+    recent_topics: list[str]
+    favorite_team: str | None
+    frequent_teammates: list[TeammateStat]

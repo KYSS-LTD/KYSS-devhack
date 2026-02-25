@@ -76,7 +76,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 ul { margin: 0; padding-left: 18px; }
 .btn-link { text-decoration: none; padding: 10px 12px; border-radius: 10px; }
 
+.top-actions { display: flex; gap: 8px; align-items: center; }
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 0 20px;
+}
+.big-number { font-size: 30px; font-weight: 800; margin: 4px 0 0; }
+
 @media (max-width: 600px) {
   .topbar { padding: 12px; }
-  .grid-2, .game-layout { padding: 12px; }
+  .grid-2, .game-layout, .grid-3 { padding: 12px; }
 }

@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database import Base, SessionLocal, engine, get_db
+from app.models import User
 from app.schemas import (
     AuthResponse,
     CreateGameRequest,
@@ -18,6 +19,7 @@ from app.schemas import (
     LoginRequest,
     RegisterRequest,
     StartGameRequest,
+    UserProfileStatsResponse,
 )
 from app.services.auth_service import auth_service
 from app.services.game_service import game_service
@@ -29,7 +31,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="QuizBattle Backend", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="QuizBattle Backend", version="1.2.0", lifespan=lifespan)
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
@@ -57,6 +59,11 @@ def register_page(request: Request):
     return templates.TemplateResponse("register.html", {"request": request})
 
 
+@app.get("/profile", response_class=HTMLResponse)
+def profile_page(request: Request):
+    return templates.TemplateResponse("profile.html", {"request": request})
+
+
 @app.get("/game/{pin}", response_class=HTMLResponse)
 def game_page(request: Request, pin: str):
     return templates.TemplateResponse("game.html", {"request": request, "pin": pin.upper()})
@@ -79,6 +86,14 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     return AuthResponse(user_id=user.id, username=user.username)
 
 
+@app.get("/users/{user_id}/stats", response_model=UserProfileStatsResponse)
+def user_stats(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return game_service.get_user_stats(db, user_id=user.id, username=user.username)
+
+
 @app.post("/games", response_model=CreateGameResponse)
 def create_game(payload: CreateGameRequest, db: Session = Depends(get_db)):
     game, host = game_service.create_game(
@@ -86,6 +101,7 @@ def create_game(payload: CreateGameRequest, db: Session = Depends(get_db)):
         host_name=payload.host_name,
         topic=payload.topic,
         questions_per_team=payload.questions_per_team,
+        user_id=payload.user_id,
     )
     state = game_service.to_state(db, game)
     return CreateGameResponse(pin=game.pin, host_player_id=host.id, state=state)
@@ -93,7 +109,7 @@ def create_game(payload: CreateGameRequest, db: Session = Depends(get_db)):
 
 @app.post("/games/{pin}/join", response_model=JoinGameResponse)
 async def join_game(pin: str, payload: JoinGameRequest, db: Session = Depends(get_db)):
-    player = game_service.join_game(db, pin.upper(), payload.name)
+    player = game_service.join_game(db, pin.upper(), payload.name, payload.user_id)
     game = game_service.get_game(db, pin.upper())
     await game_service.broadcast_state(db, game)
     return JoinGameResponse(player_id=player.id, state=game_service.to_state(db, game))

@@ -39,9 +39,11 @@ class Player(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(80))
     team: Mapped[str] = mapped_column(String(1))
     is_host: Mapped[bool] = mapped_column(Boolean, default=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     game: Mapped[Game] = relationship(back_populates="players")
