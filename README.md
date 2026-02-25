@@ -1,33 +1,23 @@
-# QuizBattle Backend (FastAPI + WebSockets + SQLite)
+# QuizBattle (FastAPI + WebSockets + SQLite)
 
-Бэкенд для хакатон-проекта **QuizBattle** по ТЗ: создание командной квиз-игры в реальном времени с хранением данных в **SQLite** и генерацией вопросов через **GigaChat** (с запасными вопросами при недоступности AI).
+Полноценный прототип командной квиз-игры по ТЗ: backend на FastAPI, хранение в SQLite, WebSocket-реалтайм и базовый фронтенд (регистрация, вход, лобби, игра).
 
-## Что реализовано
+## Реализовано
 
-- Создание игры с темой и количеством вопросов на команду (5/6/7)
-- Уникальный 6-символьный PIN (буквы + цифры) для активных игр
-- Состояния игры: `waiting`, `in_progress`, `finished`
-- Подключение игроков по PIN + имени
-- Автоматическое разделение игроков на 2 команды (A/B)
-- Старт игры только хостом
-- Поочерёдные вопросы для команд A/B
+- Регистрация и вход пользователей (`/register`, `/login` + API `/auth/*`)
+- Главная страница создания комнаты и входа по PIN
+- Уникальный PIN (6 символов, буквы + цифры)
+- Хранение игр/игроков/вопросов/пользователей в SQLite
+- Лобби с разделением на 2 команды (A/B)
+- Запуск игры только хостом
+- Поочерёдные ходы команд
+- 4 варианта ответа, подсчёт очков, победитель/ничья
 - Таймер на вопрос (30 секунд)
-- 4 варианта ответа, учёт правильных ответов
-- Реалтайм-обновления через WebSocket
-- Подсчёт очков и определение победителя/ничьей
-- Удаление игрока из игры при отключении WebSocket
-- Хранение игровых данных в SQLite (`quizbattle.db`)
+- Обновления состояния в реальном времени через WebSocket
+- Удаление игрока из игры при разрыве соединения
+- Генерация вопросов через GigaChat + fallback при недоступности AI
 
-## Технологии
-
-- Python 3.12
-- FastAPI
-- SQLAlchemy
-- SQLite
-- WebSockets
-- Requests (для GigaChat API)
-
-## Запуск
+## Запуск (Python 3.12)
 
 ```bash
 python3.12 -m venv .venv
@@ -36,14 +26,12 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Сервер стартует на `http://127.0.0.1:8000`.
+Открыть: `http://127.0.0.1:8000`
 
-## Переменные окружения для GigaChat
-
-Если переменные не заданы или AI недоступен — автоматически используются запасные вопросы.
+## ENV для GigaChat
 
 ```bash
-export GIGACHAT_AUTH_KEY="<base64_credentials_input_for_basic_auth>"
+export GIGACHAT_AUTH_KEY=""
 export GIGACHAT_SCOPE="GIGACHAT_API_PERS"
 export GIGACHAT_MODEL="GigaChat"
 export GIGACHAT_API_BASE="https://gigachat.devices.sberbank.ru/api/v1"
@@ -51,59 +39,19 @@ export GIGACHAT_AUTH_URL="https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
 export GIGACHAT_VERIFY_SSL="false"
 ```
 
-## API (основное)
+Если ключей нет или сервис недоступен, будут использованы запасные вопросы.
 
-### 1) Создать игру
-`POST /games`
+## Основные API
 
-```json
-{
-  "host_name": "Teacher",
-  "topic": "История России",
-  "questions_per_team": 5
-}
-```
+- `POST /auth/register`
+- `POST /auth/login`
+- `POST /games`
+- `POST /games/{pin}/join`
+- `POST /games/{pin}/start`
+- `GET /games/{pin}`
+- `WS /ws/{pin}/{player_id}`
 
-### 2) Присоединиться к игре
-`POST /games/{pin}/join`
-
-```json
-{
-  "name": "Student 1"
-}
-```
-
-### 3) Запустить игру (только хост)
-`POST /games/{pin}/start`
-
-```json
-{
-  "host_player_id": 1
-}
-```
-
-### 4) Получить состояние игры
-`GET /games/{pin}`
-
-### 5) WebSocket
-`WS /ws/{pin}/{player_id}`
-
-Событие от клиента:
-
-```json
-{
-  "action": "answer",
-  "option_index": 2
-}
-```
-
-Сервер отправляет:
-
-- `type: "state"` — актуальное состояние игры
-- `type: "answer_result"` — результат ответа
-- `type: "pong"` — ответ на ping
-
-## Структура проекта
+## Структура
 
 ```text
 app/
@@ -111,9 +59,19 @@ app/
   database.py
   models.py
   schemas.py
+  templates/
+    login.html
+    register.html
+    index.html
+    game.html
+  static/
+    css/style.css
+    js/login.js
+    js/register.js
+    js/index.js
+    js/game.js
   services/
+    auth_service.py
     ai_service.py
     game_service.py
-requirements.txt
-README.md
 ```

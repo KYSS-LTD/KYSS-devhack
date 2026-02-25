@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuizBattle — Игра {{ pin }}</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Комната <span id="pin">{{ pin }}</span></h1>
+    <a href="/" class="secondary btn-link">На главную</a>
+  </header>
+
+  <main class="stack game-layout">
+    <section class="card center">
+      <h2 id="topic">Тема: ...</h2>
+      <p class="score">Счёт: <span class="team-a" id="score-a">0</span> : <span class="team-b" id="score-b">0</span></p>
+      <p id="turn" class="status">Ожидание состояния игры...</p>
+      <p id="timer" class="timer"></p>
+      <button id="start-btn" class="hidden">Начать игру</button>
+    </section>
+
+    <section class="grid-2">
+      <article class="card">
+        <h3>Команда A (красные)</h3>
+        <ul id="team-a-list"></ul>
+      </article>
+      <article class="card">
+        <h3>Команда B (синие)</h3>
+        <ul id="team-b-list"></ul>
+      </article>
+    </section>
+
+    <section class="card">
+      <h3 id="question-title">Вопрос</h3>
+      <div id="question-text">После старта здесь появится вопрос.</div>
+      <div id="answers" class="answers"></div>
+      <p id="answer-result" class="status"></p>
+    </section>
+  </main>
+
+  <script>
+    window.QUIZBATTLE_PIN = "{{ pin }}";
+  </script>
+  <script src="/static/js/game.js"></script>
+</body>
+</html>

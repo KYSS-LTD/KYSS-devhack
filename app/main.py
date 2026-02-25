@@ -1,11 +1,25 @@
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database import Base, SessionLocal, engine, get_db
-from app.schemas import CreateGameRequest, CreateGameResponse, GameStateOut, JoinGameRequest, JoinGameResponse, StartGameRequest
+from app.schemas import (
+    AuthResponse,
+    CreateGameRequest,
+    CreateGameResponse,
+    GameStateOut,
+    JoinGameRequest,
+    JoinGameResponse,
+    LoginRequest,
+    RegisterRequest,
+    StartGameRequest,
+)
+from app.services.auth_service import auth_service
 from app.services.game_service import game_service
 
 
@@ -15,7 +29,9 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="QuizBattle Backend", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="QuizBattle Backend", version="1.1.0", lifespan=lifespan)
+templates = Jinja2Templates(directory="app/templates")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,9 +42,41 @@ app.add_middleware(
 )
 
 
+@app.get("/", response_class=HTMLResponse)
+def home_page(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request):
+    return templates.TemplateResponse("register.html", {"request": request})
+
+
+@app.get("/game/{pin}", response_class=HTMLResponse)
+def game_page(request: Request, pin: str):
+    return templates.TemplateResponse("game.html", {"request": request, "pin": pin.upper()})
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.post("/auth/register", response_model=AuthResponse)
+def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+    user = auth_service.register(db, payload.username.strip(), payload.password)
+    return AuthResponse(user_id=user.id, username=user.username)
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    user = auth_service.login(db, payload.username.strip(), payload.password)
+    return AuthResponse(user_id=user.id, username=user.username)
 
 
 @app.post("/games", response_model=CreateGameResponse)

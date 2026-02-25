@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuizBattle — Регистрация</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <main class="auth-container">
+    <section class="card auth-card">
+      <h1>Регистрация</h1>
+      <p class="muted">Создай аккаунт для входа в QuizBattle.</p>
+      <form id="register-form" class="stack">
+        <label>Логин
+          <input name="username" type="text" required minlength="3" maxlength="50" />
+        </label>
+        <label>Пароль
+          <input name="password" type="password" required minlength="6" maxlength="128" />
+        </label>
+        <button type="submit">Зарегистрироваться</button>
+      </form>
+      <p id="register-msg" class="status"></p>
+      <p class="muted">Уже есть аккаунт? <a href="/login">Вход</a></p>
+    </section>
+  </main>
+  <script src="/static/js/register.js"></script>
+</body>
+</html>
