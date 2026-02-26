@@ -75,17 +75,17 @@
             <div id="captain-controls" class="hidden p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 rounded-xl space-y-2">
                 <p class="text-[10px] font-bold text-amber-600 uppercase">Корона капитана</p>
                 <div class="flex flex-col sm:flex-row gap-2">
-                    <select id="captain-select" class="flex-1 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-xs rounded-lg px-2 py-1 outline-none"></select>
-                    <button id="transfer-captain-btn" class="px-3 py-1 bg-amber-500 text-white text-xs rounded-lg font-semibold hover:bg-amber-600 transition">Передать</button>
+                    <select id="captain-select" class="w-full sm:w-auto sm:flex-[2] bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-xs rounded-lg px-2 py-1 outline-none"></select>
+                    <button id="transfer-captain-btn" class="w-full sm:w-auto sm:flex-1 px-3 py-1 bg-amber-500 text-white text-xs rounded-lg font-semibold hover:bg-amber-600 transition">Передать</button>
                 </div>
             </div>
 
             <div id="host-controls" class="hidden p-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl space-y-3">
                 <p class="text-[10px] font-bold text-slate-500 uppercase">Панель ведущего</p>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <button id="pause-btn" class="p-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-xs hover:bg-slate-50 transition">Пауза</button>
-                    <button id="resume-btn" class="p-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-xs hover:bg-slate-50 transition">Пуск</button>
-                    <button id="next-question-btn" class="p-2 bg-indigo-500 text-white rounded-lg text-xs hover:bg-indigo-600 transition">Далее</button>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <button id="pause-btn" class="sm:flex-1 p-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-xs hover:bg-slate-50 transition">Пауза</button>
+                    <button id="resume-btn" class="sm:flex-1 p-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-xs hover:bg-slate-50 transition">Пуск</button>
+                    <button id="next-question-btn" class="sm:flex-none p-2 bg-indigo-500 text-white rounded-lg text-xs hover:bg-indigo-600 transition">Далее</button>
                 </div>
                 <div class="flex gap-2">
                     <select id="kick-player-select" class="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-xs rounded-lg px-2 py-1 outline-none"></select>
