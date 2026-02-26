@@ -91,3 +91,6 @@ ul { margin: 0; padding-left: 18px; }
 }
 
 .answer-row { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+
+.captain-controls { display: grid; gap: 8px; margin-top: 12px; }
+.answer-row { align-items: stretch; }

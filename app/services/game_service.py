@@ -331,7 +331,16 @@ class GameService:
         if game.status == "in_progress":
             await self.start_timer(pin, game.difficulty)
 
-    async def host_control(self, db: Session, pin: str, host_player_id: int, action: str, target_player_id: int | None = None) -> None:
+    async def host_control(
+        self,
+        db: Session,
+        pin: str,
+        host_player_id: int,
+        action: str,
+        target_player_id: int | None = None,
+        topic: str | None = None,
+        difficulty: str | None = None,
+    ) -> None:
         game = self.get_game(db, pin)
         host = db.query(Player).filter(Player.id == host_player_id, Player.game_id == game.id).first()
         if not host or not host.is_host:
@@ -358,6 +367,49 @@ class GameService:
             target = db.query(Player).filter(Player.id == target_player_id, Player.game_id == game.id).first()
             if target:
                 target.active = False
+        elif action == "restart":
+            if game.status != "finished":
+                raise HTTPException(status_code=400, detail="Restart available only after game end")
+            if topic and topic.strip():
+                game.topic = topic.strip()
+            if difficulty in {"easy", "medium", "hard"}:
+                game.difficulty = difficulty
+
+            db.query(Question).filter(Question.game_id == game.id).delete()
+            for team in ("A", "B"):
+                generated = generate_questions(game.topic, game.questions_per_team)
+                for idx, q in enumerate(generated):
+                    db.add(
+                        Question(
+                            game_id=game.id,
+                            team=team,
+                            order_index=idx,
+                            text=q["text"],
+                            option_1=q["options"][0],
+                            option_2=q["options"][1],
+                            option_3=q["options"][2],
+                            option_4=q["options"][3],
+                            correct_option=q["correct_option"],
+                        )
+                    )
+
+            game.status = "waiting"
+            game.phase = "gathering"
+            game.current_team = None
+            game.current_index_a = 0
+            game.current_index_b = 0
+            game.score_a = 0
+            game.score_b = 0
+            game.question_started_at = None
+            self.votes[pin] = {}
+            self.team_stats[pin] = {
+                "A": {"correct": 0, "incorrect": 0, "timeout": 0, "speed_bonus": 0},
+                "B": {"correct": 0, "incorrect": 0, "timeout": 0, "speed_bonus": 0},
+            }
+            active_players = db.query(Player).filter(Player.game_id == game.id, Player.active.is_(True)).all()
+            for pl in active_players:
+                pl.team = None
+                pl.is_captain = False
         db.commit()
         await self.broadcast_state(db, game)
 
