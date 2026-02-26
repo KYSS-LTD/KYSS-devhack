@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSo
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from fastapi.responses import JSONResponse
+from fastapi import Cookie
 
 from app.database import SessionLocal, get_db
 from app.models import User
@@ -57,14 +59,46 @@ def register_page(request: Request):
     return templates.TemplateResponse("register.html", {"request": request})
 
 
+def get_current_user(
+    user_id: int | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+) -> User:
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    return user
+
 @router.get("/profile", response_class=HTMLResponse)
-def profile_page(request: Request):
-    return templates.TemplateResponse("profile.html", {"request": request})
+def profile_page(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    stats = game_service.get_user_stats(
+        db,
+        user_id=current_user.id,
+        username=current_user.username
+    )
+
+    return templates.TemplateResponse(
+        "profile.html",
+        {
+            "request": request,
+            "user": current_user,
+            "stats": stats
+        }
+    )
 
 
 @router.get("/rating", response_class=HTMLResponse)
-def rating_page(request: Request):
-    return templates.TemplateResponse("rating.html", {"request": request})
+def rating_page(request: Request, db: Session = Depends(get_db)):
+    rating = game_service.get_rating(db)
+    return templates.TemplateResponse("rating.html", {"request": request, "rating": rating})
 
 
 @router.get("/game/{pin}", response_class=HTMLResponse)
@@ -88,7 +122,19 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     enforce_rate_limit(request)
     user = auth_service.login(db, payload.username.strip(), payload.password)
-    return AuthResponse(user_id=user.id, username=user.username)
+
+    response = JSONResponse(
+        content=AuthResponse(user_id=user.id, username=user.username).dict()
+    )
+
+    response.set_cookie(
+        key="user_id",
+        value=str(user.id),
+        httponly=True,
+        samesite="lax",
+    )
+
+    return response
 
 
 @router.get("/users/{user_id}/stats", response_model=UserProfileStatsResponse)
@@ -171,5 +217,4 @@ async def game_socket(websocket: WebSocket, pin: str, player_id: int):
         pass
     finally:
         game_service.manager.disconnect(pin, websocket)
-        await game_service.remove_player(db, pin, player_id)
         db.close()

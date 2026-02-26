@@ -69,11 +69,6 @@ app/
     profile.html
   static/
     css/style.css
-    js/login.js
-    js/register.js
-    js/index.js
-    js/game.js
-    js/profile.js
   services/
     auth_service.py
     ai_service.py

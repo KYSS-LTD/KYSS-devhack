@@ -1,22 +1,110 @@
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>QuizBattle — Рейтинг</title>
-  <link rel="stylesheet" href="/static/css/style.css" />
-</head>
-<body>
-  <header class="topbar">
-    <h1>Рейтинг игроков</h1>
-    <div class="top-actions"><a href="/" class="secondary btn-link">Главная</a></div>
-  </header>
-  <main class="game-layout">
-    <section class="card">
-      <ol id="rating-list"></ol>
-      <p id="rating-msg" class="status"></p>
-    </section>
-  </main>
-  <script src="/static/js/rating.js"></script>
-</body>
-</html>
+{% extends 'base.html' %}
+
+{% block title %}Рейтинг{% endblock %}
+
+{% block card %}
+
+<div class="absolute inset-0 rounded-3xl pointer-events-none
+            bg-gradient-to-br from-white/40 to-transparent
+            dark:from-white/5"></div>
+
+<div class="relative space-y-6">
+  <!-- ===== LIST ===== -->
+  {% if rating and rating.rows %}
+
+    <ol class="space-y-3">
+      {% for row in rating.rows %}
+
+        {% set place = loop.index %}
+
+        {# --- medal colors --- #}
+        {% if place == 1 %}
+          {% set medal      = "🥇" %}
+          {% set ring_cls   = "ring-2 ring-amber-400/60" %}
+          {% set num_cls    = "text-amber-500" %}
+          {% set badge_cls  = "bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400" %}
+        {% elif place == 2 %}
+          {% set medal      = "🥈" %}
+          {% set ring_cls   = "ring-2 ring-slate-400/50" %}
+          {% set num_cls    = "text-slate-400" %}
+          {% set badge_cls  = "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400" %}
+        {% elif place == 3 %}
+          {% set medal      = "🥉" %}
+          {% set ring_cls   = "ring-2 ring-orange-400/50" %}
+          {% set num_cls    = "text-orange-400" %}
+          {% set badge_cls  = "bg-orange-100 text-orange-500 dark:bg-orange-900/30 dark:text-orange-400" %}
+        {% else %}
+          {% set medal      = "" %}
+          {% set ring_cls   = "" %}
+          {% set num_cls    = "text-slate-400 dark:text-slate-600" %}
+          {% set badge_cls  = "bg-slate-100 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400" %}
+        {% endif %}
+
+        <li class="relative flex items-center gap-4
+                   rounded-2xl px-5 py-4
+                   bg-white/70 dark:bg-slate-900/70
+                   backdrop-blur-xl
+                   border border-white/40 dark:border-slate-800
+                   shadow-soft dark:shadow-softDark
+                   {{ ring_cls }}
+                   transition hover:scale-[1.01]">
+          <div class="absolute inset-0 rounded-2xl pointer-events-none
+                      bg-gradient-to-br from-white/40 to-transparent dark:from-white/5"></div>
+
+          <!-- Place number -->
+          <span class="relative w-7 text-center text-lg font-black {{ num_cls }} flex-shrink-0">
+            {% if medal %}{{ medal }}{% else %}{{ place }}{% endif %}
+          </span>
+
+          <!-- Avatar initial -->
+          <div class="relative w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center
+                      text-white text-sm font-bold flex-shrink-0 shadow-md shadow-indigo-500/20 select-none">
+            {{ row.username[0].upper() }}
+          </div>
+
+          <!-- Name -->
+          <span class="relative flex-1 font-semibold truncate">{{ row.username }}</span>
+
+          <!-- Stats badges -->
+          <div class="relative flex items-center gap-2 flex-shrink-0">
+            <span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-xl
+                         bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              {{ row.wins }}
+            </span>
+            <span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-xl {{ badge_cls }}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5M3.75 6h16.5M3.75 18h16.5" />
+              </svg>
+              {{ row.games_finished }}
+            </span>
+          </div>
+        </li>
+
+      {% endfor %}
+    </ol>
+
+    <!-- Legend -->
+    <div class="flex items-center justify-center gap-6 pt-1 text-xs text-slate-400 dark:text-slate-600">
+      <span class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>Побед
+      </span>
+      <span class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-indigo-400 inline-block"></span>Завершено игр
+      </span>
+    </div>
+
+  {% else %}
+  <div class="text-center py-12 text-slate-400 dark:text-slate-500">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 mx-auto mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 002.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 012.916.52 6.003 6.003 0 01-5.395 4.972m0 0a6.726 6.726 0 01-2.749 1.35m0 0a6.772 6.772 0 01-3.044 0" />
+    </svg>
+    <p class="text-sm font-medium">Рейтинг пока пуст</p>
+    <p class="text-xs mt-1">Сыграйте несколько игр — и вы появитесь здесь</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

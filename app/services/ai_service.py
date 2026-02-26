@@ -1,7 +1,7 @@
 import json
 import os
 import random
-from typing import Any, List
+from typing import Any, List, Dict
 import requests
 from dotenv import load_dotenv
 
@@ -33,21 +33,15 @@ class TimewebClient:
             "https://agent.timeweb.cloud/api/v1/cloud-ai/agents/696c108a-b9f3-4c1b-ad84-bf2209a2168f/v1"
         )
         self.model = os.getenv("TIMEWEB_MODEL", "claude3.5")
-        self.timeout = int(os.getenv("TIMEWEB_TIMEOUT", "40"))
+        self.timeout = int(os.getenv("TIMEWEB_TIMEOUT", "60"))  # Увеличил таймаут для большого пака
 
     def is_configured(self) -> bool:
-        if not self.api_key:
-            print("⚠️  WARNING: TIMEWEB_API_KEY not set in environment variables")
-            return False
-        return True
+        return bool(self.api_key)
 
-    def _validate_questions(
-            self, questions: List[dict[str, Any]], count: int, used_texts: set
-    ) -> List[dict[str, Any]]:
-        valid: List[dict[str, Any]] = []
+    def _validate_questions(self, questions: List[dict], count: int, used_texts: set) -> List[dict]:
+        valid: List[dict] = []
         for item in questions:
-            if not isinstance(item, dict):
-                continue
+            if not isinstance(item, dict): continue
             text = item.get("text")
             options = item.get("options", [])
             correct = item.get("correct_option")
@@ -55,106 +49,104 @@ class TimewebClient:
             if not text or text in used_texts or not isinstance(options, list) or len(options) < 4:
                 continue
 
-            options = options[:4]
-
             try:
                 correct = int(correct)
-            except (ValueError, TypeError):
+                if correct not in [1, 2, 3, 4]: continue
+            except:
                 continue
 
-            if correct not in [1, 2, 3, 4]:
-                continue
-
-            valid.append({"text": text, "options": options, "correct_option": correct})
+            valid.append({"text": text, "options": options[:4], "correct_option": correct})
             used_texts.add(text)
+            if len(valid) >= count: break
 
-            if len(valid) >= count:
-                break
-
-        if len(valid) < count:
-            raise ValueError("Недостаточно валидных уникальных вопросов от AI")
         return valid
 
-    def generate_questions(self, topic: str, count: int, used_texts: set) -> List[dict[str, Any]]:
-        prompt = f"Сгенерируй {count} уникальных вопросов для викторины по теме {topic}"
+    def generate_batch_questions(self, topic: str, total_count: int, used_texts: set) -> List[dict]:
+        """Генерирует сразу большое количество вопросов одним запросом."""
+        # Явный промпт для JSON формата, чтобы нейросеть не ошибалась
+        prompt = (
+            f"Сгенерируй {total_count} уникальных вопросов для викторины по теме '{topic}'. "
+            "Ответь строго в формате JSON массива объектов: "
+            "[{\"text\": \"...\", \"options\": [\"...\", \"...\", \"...\", \"...\"], \"correct_option\": 1}]. "
+            "Нумерация правильного ответа от 1 до 4."
+        )
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         payload = {
             "model": self.model,
-            "temperature": 0.5,
+            "temperature": 0.7,  # Чуть выше, чтобы вопросы были разнообразнее
             "messages": [{"role": "user", "content": prompt}],
         }
 
         for attempt in range(3):
             try:
-                print(f"\n📤 TIMEWEB API Request (Attempt {attempt + 1}/3):")
-                print(f"   URL: {self.api_base}/chat/completions")
-                print(f"   API Key: {self.api_key[:20]}{'...' if len(self.api_key) > 20 else ''}")
-
-                response = requests.post(
-                    f"{self.api_base}/chat/completions",
-                    headers=headers,
-                    json=payload,
-                    timeout=self.timeout,
-                )
-
-                print(f"   Status: {response.status_code}")
-
-                if response.status_code == 401:
-                    print("   ❌ Authentication failed (401)")
-                    print("   Possible issues:")
-                    print("      - TIMEWEB_API_KEY is empty or not set")
-                    print("      - API key is invalid or expired")
-                    print("      - Check your API key at https://timeweb.cloud")
-                    raise Exception("Unauthorized - check API key")
-
+                print(f"📡 Запрос к AI: Генерация пака из {total_count} вопросов...")
+                response = requests.post(f"{self.api_base}/chat/completions", headers=headers, json=payload,
+                                         timeout=self.timeout)
                 response.raise_for_status()
 
-                data = response.json()
-                content = data["choices"][0]["message"]["content"].strip()
-
-                # Удаляем markdown обертку если присутствует
-                if content.startswith("```"):
-                    content = content.split("```")[1].strip()
-                    if content.startswith("json"):
-                        content = content[4:].strip()
+                content = response.json()["choices"][0]["message"]["content"].strip()
+                if "```" in content:
+                    content = content.split("```")[1].replace("json", "").strip()
 
                 parsed = json.loads(content)
+                if isinstance(parsed, dict) and "data" in parsed: parsed = parsed["data"]
 
-                # Если ответ не массив, попытаемся получить поле data
-                if isinstance(parsed, dict) and "data" in parsed:
-                    parsed = parsed["data"]
-
-                if not isinstance(parsed, list):
-                    parsed = [parsed]
-
-                return self._validate_questions(parsed, count, used_texts)
-
+                questions = self._validate_questions(parsed, total_count, used_texts)
+                if len(questions) >= total_count:
+                    return questions
+                print(f"⚠️ Получено {len(questions)}/{total_count} валидных вопросов, пробую еще раз...")
             except Exception as e:
-                print(f"TIMEWEB ATTEMPT {attempt + 1} FAILED: {e}")
+                print(f"❌ Ошибка генерации (попытка {attempt + 1}): {e}")
 
-        raise ValueError("AI не сгенерировал валидные вопросы после 3 попыток")
+        # Если AI подвел, берем из фолбека
+        print("🛟 Использую резервные вопросы")
+        pool = [q for q in FALLBACK_QUESTIONS if q["text"] not in used_texts]
+        random.shuffle(pool)
+        return pool[:total_count]
 
 
-def generate_questions(topic: str, count: int, used_texts: set = None) -> List[dict[str, Any]]:
+def get_questions_for_teams(teams: List[str], topic: str, q_per_team: int = 2) -> Dict[str, List[dict]]:
+    """
+    Главная функция: делает 1 запрос и распределяет вопросы по командам.
+    """
+    client = TimewebClient()
+    total_needed = len(teams) * q_per_team
+    used_texts = set()
+
+    # 1. Получаем общий список вопросов
+    all_questions = client.generate_batch_questions(topic, total_needed, used_texts)
+
+    # 2. Перемешиваем для пущей случайности
+    random.shuffle(all_questions)
+
+    # 3. Распределяем по командам
+    team_assignments = {}
+    for i, team in enumerate(teams):
+        start_idx = i * q_per_team
+        team_assignments[team] = all_questions[start_idx: start_idx + q_per_team]
+
+    return team_assignments
+
+
+def generate_questions(topic: str, count: int, used_texts: set = None) -> List[dict]:
+    """
+    Генерирует пачку вопросов за один запрос.
+    Используется как совместимый интерфейс для старого кода,
+    но теперь работает через batch-метод.
+    """
     if used_texts is None:
         used_texts = set()
 
     client = TimewebClient()
-    if client.is_configured():
-        try:
-            return client.generate_questions(topic, count, used_texts)
-        except Exception as e:
-            print("Using fallback questions due to AI failure:", e)
+    # Пытаемся получить всё одним махом
+    questions = client.generate_batch_questions(topic, count, used_texts)
 
-    # Fallback — случайные уникальные вопросы из встроенного набора
-    pool = [q for q in FALLBACK_QUESTIONS if q["text"] not in used_texts]
-    random.shuffle(pool)
-    selected = pool[:count]
-    for q in selected:
-        used_texts.add(q["text"])
-    return selected
+    # Если вдруг AI выдал меньше, чем просили, добираем из заглушек
+    if len(questions) < count:
+        needed = count - len(questions)
+        pool = [q for q in FALLBACK_QUESTIONS if q["text"] not in used_texts]
+        random.shuffle(pool)
+        questions.extend(pool[:needed])
+
+    return questions[:count]

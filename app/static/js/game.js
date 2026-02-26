@@ -82,7 +82,11 @@ function renderLobby(players) {
   lobbyList.innerHTML = '';
   players.forEach((p) => {
     const li = document.createElement('li');
-    li.textContent = `${p.name}${p.is_host ? ' (ведущий)' : ''}`;
+    li.className = 'flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0';
+    li.innerHTML = `
+      <span>${p.name}${p.is_host ? ' <span class="text-[10px] bg-indigo-100 dark:bg-indigo-900 text-indigo-500 px-1.5 py-0.5 rounded ml-1">HOST</span>' : ''}</span>
+      <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
+    `;
     lobbyList.appendChild(li);
   });
 }
@@ -163,38 +167,49 @@ function renderHostControls(players, me, state) {
 function renderAnswers(options, canAnswer, canVote) {
   answersEl.innerHTML = '';
   options.forEach((option, idx) => {
-    const row = document.createElement('div');
-    row.className = 'answer-row';
+    const container = document.createElement('div');
+    container.className = 'grid grid-cols-5 gap-2 mb-2';
 
+    // Кнопка голосования (маленькая слева)
     const voteBtn = document.createElement('button');
-    voteBtn.className = 'secondary';
-    voteBtn.textContent = `Голос: ${idx + 1}) ${option}`;
+    voteBtn.className = `col-span-1 py-2 rounded-lg text-xs font-bold transition ${canVote ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-100' : 'bg-slate-50 text-slate-300 cursor-not-allowed'}`;
+    voteBtn.textContent = idx + 1;
     voteBtn.disabled = !canVote;
-    voteBtn.addEventListener('click', () => ws.send(JSON.stringify({ action: 'vote', choice: String(idx + 1) })));
-    row.appendChild(voteBtn);
+    voteBtn.onclick = () => ws.send(JSON.stringify({ action: 'vote', choice: String(idx + 1) }));
 
-    if (canAnswer) {
-      const answerBtn = document.createElement('button');
-      answerBtn.textContent = `Ответ: ${idx + 1}) ${option}`;
-      answerBtn.addEventListener('click', () => ws.send(JSON.stringify({ action: 'answer', option_index: idx + 1 })));
-      row.appendChild(answerBtn);
-    }
+    // Кнопка основного ответа (большая)
+    const answerBtn = document.createElement('button');
+    answerBtn.className = `col-span-4 py-2 px-4 rounded-lg text-sm font-medium text-left transition ${canAnswer ? 'bg-indigo-600 text-white hover:bg-indigo-500 active:scale-[0.98]' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`;
+    answerBtn.textContent = option;
+    answerBtn.disabled = !canAnswer;
+    answerBtn.onclick = () => ws.send(JSON.stringify({ action: 'answer', option_index: idx + 1 }));
 
-    answersEl.appendChild(row);
+    container.appendChild(voteBtn);
+    container.appendChild(answerBtn);
+    answersEl.appendChild(container);
   });
 
+  // Кнопки пропуска
+  const skipContainer = document.createElement('div');
+  skipContainer.className = 'grid grid-cols-5 gap-2 mt-4';
+
   const skipVoteBtn = document.createElement('button');
-  skipVoteBtn.className = 'secondary';
-  skipVoteBtn.textContent = 'Голосовать за пропуск';
+  skipVoteBtn.className = 'col-span-1 py-2 rounded-lg text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-500 transition uppercase font-bold';
+  skipVoteBtn.textContent = 'Skip';
   skipVoteBtn.disabled = !canVote;
   skipVoteBtn.onclick = () => ws.send(JSON.stringify({ action: 'vote', choice: 'skip' }));
-  answersEl.appendChild(skipVoteBtn);
 
   if (canAnswer) {
     const skipBtn = document.createElement('button');
+    skipBtn.className = 'col-span-4 py-2 border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 rounded-lg text-xs hover:bg-red-50 hover:text-red-500 transition';
     skipBtn.textContent = 'Пропустить вопрос (капитан)';
     skipBtn.onclick = () => ws.send(JSON.stringify({ action: 'skip' }));
-    answersEl.appendChild(skipBtn);
+    skipContainer.appendChild(skipVoteBtn);
+    skipContainer.appendChild(skipBtn);
+    answersEl.appendChild(skipContainer);
+  } else {
+    skipContainer.appendChild(skipVoteBtn);
+    answersEl.appendChild(skipContainer);
   }
 }
 
@@ -266,7 +281,7 @@ function renderState(state) {
     captainControlsEl.classList.add('hidden');
     hostControlsEl.classList.add('hidden');
     turnEl.textContent = 'Период подключения: участники в лобби';
-    qText.textContent = `PIN комнаты: ${state.pin}. После старта игроки автоматически будут распределены по командам.`;
+    qText.textContent = `Здесь появится вопрос после начала игры`;
     answersEl.innerHTML = '';
     timerEl.textContent = '';
     currentQuestionId = null;

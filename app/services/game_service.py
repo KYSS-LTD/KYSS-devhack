@@ -69,24 +69,49 @@ class GameService:
                 return pin
 
     def create_game(
-        self,
-        db: Session,
-        host_name: str,
-        topic: str,
-        questions_per_team: int,
-        user_id: int | None,
-        difficulty: str = "medium",
+            self,
+            db: Session,
+            host_name: str,
+            topic: str,
+            questions_per_team: int,
+            user_id: int | None,
+            difficulty: str = "medium",
     ) -> tuple[Game, Player]:
         pin = self.generate_pin(db)
-        game = Game(pin=pin, topic=topic, questions_per_team=questions_per_team, status="waiting", difficulty=difficulty, phase="gathering")
+        game = Game(pin=pin, topic=topic, questions_per_team=questions_per_team, status="waiting",
+                    difficulty=difficulty, phase="gathering")
         db.add(game)
         db.flush()
-        host = Player(game_id=game.id, user_id=user_id, name=host_name, team=None, is_host=True, is_captain=False, active=True)
+
+        host = Player(game_id=game.id, user_id=user_id, name=host_name, team=None, is_host=True, is_captain=False,
+                      active=True)
         db.add(host)
-        for team in ("A", "B"):
-            generated = generate_questions(topic, questions_per_team)
-            for idx, q in enumerate(generated):
-                db.add(Question(game_id=game.id, team=team, order_index=idx, text=q["text"], option_1=q["options"][0], option_2=q["options"][1], option_3=q["options"][2], option_4=q["options"][3], correct_option=q["correct_option"]))
+
+        # --- ОДИН ЗАПРОС НА ВСЕ КОМАНДЫ ---
+        total_count = questions_per_team * 2
+        all_generated = generate_questions(topic, total_count)
+
+        # Перемешиваем, чтобы распределение было случайным
+        random.shuffle(all_generated)
+
+        # Распределяем: первые N — команде A, остальные — команде B
+        for i, q_data in enumerate(all_generated):
+            team_label = "A" if i < questions_per_team else "B"
+            order_idx = i if team_label == "A" else i - questions_per_team
+
+            db.add(Question(
+                game_id=game.id,
+                team=team_label,
+                order_index=order_idx,
+                text=q_data["text"],
+                option_1=q_data["options"][0],
+                option_2=q_data["options"][1],
+                option_3=q_data["options"][2],
+                option_4=q_data["options"][3],
+                correct_option=q_data["correct_option"]
+            ))
+        # ----------------------------------
+
         db.commit()
         db.refresh(game)
         db.refresh(host)
@@ -376,22 +401,26 @@ class GameService:
                 game.difficulty = difficulty
 
             db.query(Question).filter(Question.game_id == game.id).delete()
-            for team in ("A", "B"):
-                generated = generate_questions(game.topic, game.questions_per_team)
-                for idx, q in enumerate(generated):
-                    db.add(
-                        Question(
-                            game_id=game.id,
-                            team=team,
-                            order_index=idx,
-                            text=q["text"],
-                            option_1=q["options"][0],
-                            option_2=q["options"][1],
-                            option_3=q["options"][2],
-                            option_4=q["options"][3],
-                            correct_option=q["correct_option"],
-                        )
-                    )
+
+            # --- ОДИН ЗАПРОС ПРИ РЕСТАРТЕ ---
+            total_count = game.questions_per_team * 2
+            all_generated = generate_questions(game.topic, total_count)
+            random.shuffle(all_generated)
+
+            for i, q_data in enumerate(all_generated):
+                team_label = "A" if i < game.questions_per_team else "B"
+                order_idx = i if team_label == "A" else i - game.questions_per_team
+                db.add(Question(
+                    game_id=game.id,
+                    team=team_label,
+                    order_index=order_idx,
+                    text=q_data["text"],
+                    option_1=q_data["options"][0],
+                    option_2=q_data["options"][1],
+                    option_3=q_data["options"][2],
+                    option_4=q_data["options"][3],
+                    correct_option=q_data["correct_option"],
+                ))
 
             game.status = "waiting"
             game.phase = "gathering"
