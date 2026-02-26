@@ -136,6 +136,32 @@ class GameService:
             raise HTTPException(status_code=404, detail="Game not found")
         if game.status != "waiting":
             raise HTTPException(status_code=400, detail="Game already started")
+
+        if user_id is not None:
+            existing_by_user = (
+                db.query(Player)
+                .filter(
+                    Player.game_id == game.id,
+                    Player.active.is_(True),
+                    Player.user_id == user_id,
+                )
+                .first()
+            )
+            if existing_by_user:
+                raise HTTPException(status_code=400, detail="Вы уже в этой комнате")
+
+        existing_by_name = (
+            db.query(Player)
+            .filter(
+                Player.game_id == game.id,
+                Player.active.is_(True),
+                Player.name == name,
+            )
+            .first()
+        )
+        if existing_by_name:
+            raise HTTPException(status_code=400, detail="Игрок с таким именем уже в комнате")
+
         player = Player(game_id=game.id, user_id=user_id, name=name, team=None, is_host=False, is_captain=False, active=True)
         db.add(player)
         db.commit()

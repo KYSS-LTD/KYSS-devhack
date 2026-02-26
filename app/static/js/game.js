@@ -18,7 +18,6 @@ const qText = document.getElementById('question-text');
 const answersEl = document.getElementById('answers');
 const resultEl = document.getElementById('answer-result');
 const timerEl = document.getElementById('timer');
-const voteStatsEl = document.getElementById('vote-stats');
 const startBtn = document.getElementById('start-btn');
 const saveResultsBtn = document.getElementById('save-results-btn');
 const captainControlsEl = document.getElementById('captain-controls');
@@ -164,62 +163,58 @@ function renderHostControls(players, me, state) {
   kickBtn.disabled = candidates.length === 0;
 }
 
-function renderAnswers(options, canAnswer, canVote) {
+function renderAnswers(options, canAnswer, canVote, votePercentages) {
   answersEl.innerHTML = '';
+
+  const addVoteHint = (parent, choice) => {
+    const pct = Number(votePercentages?.[choice] || 0);
+    if (!pct) return;
+    const hint = document.createElement('div');
+    hint.className = 'mb-1 px-3 py-1 rounded-t-lg text-xs font-semibold bg-sky-500 text-white';
+    hint.textContent = `${pct}% — проголосовало`;
+    parent.appendChild(hint);
+  };
+
   options.forEach((option, idx) => {
-    const container = document.createElement('div');
-    container.className = 'grid grid-cols-5 gap-2 mb-2';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mb-2';
 
-    // Кнопка голосования (маленькая слева)
-    const voteBtn = document.createElement('button');
-    voteBtn.className = `col-span-1 py-2 rounded-lg text-xs font-bold transition ${canVote ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-100' : 'bg-slate-50 text-slate-300 cursor-not-allowed'}`;
-    voteBtn.textContent = idx + 1;
-    voteBtn.disabled = !canVote;
-    voteBtn.onclick = () => ws.send(JSON.stringify({ action: 'vote', choice: String(idx + 1) }));
+    addVoteHint(wrapper, String(idx + 1));
 
-    // Кнопка основного ответа (большая)
     const answerBtn = document.createElement('button');
-    answerBtn.className = `col-span-4 py-2 px-4 rounded-lg text-sm font-medium text-left transition ${canAnswer ? 'bg-indigo-600 text-white hover:bg-indigo-500 active:scale-[0.98]' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`;
+    answerBtn.className = `w-full py-2.5 px-4 rounded-lg text-sm font-medium text-left transition ${canVote ? 'bg-indigo-600 text-white hover:bg-indigo-500 active:scale-[0.98]' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`;
     answerBtn.textContent = option;
-    answerBtn.disabled = !canAnswer;
-    answerBtn.onclick = () => ws.send(JSON.stringify({ action: 'answer', option_index: idx + 1 }));
+    answerBtn.disabled = !canVote;
+    answerBtn.onclick = () => {
+      if (canAnswer) {
+        ws.send(JSON.stringify({ action: 'answer', option_index: idx + 1 }));
+      } else {
+        ws.send(JSON.stringify({ action: 'vote', choice: String(idx + 1) }));
+      }
+    };
 
-    container.appendChild(voteBtn);
-    container.appendChild(answerBtn);
-    answersEl.appendChild(container);
+    wrapper.appendChild(answerBtn);
+    answersEl.appendChild(wrapper);
   });
 
-  // Кнопки пропуска
-  const skipContainer = document.createElement('div');
-  skipContainer.className = 'grid grid-cols-5 gap-2 mt-4';
+  const skipWrapper = document.createElement('div');
+  skipWrapper.className = 'mt-3';
+  addVoteHint(skipWrapper, 'skip');
 
-  const skipVoteBtn = document.createElement('button');
-  skipVoteBtn.className = 'col-span-1 py-2 rounded-lg text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-500 transition uppercase font-bold';
-  skipVoteBtn.textContent = 'Skip';
-  skipVoteBtn.disabled = !canVote;
-  skipVoteBtn.onclick = () => ws.send(JSON.stringify({ action: 'vote', choice: 'skip' }));
+  const skipBtn = document.createElement('button');
+  skipBtn.className = `w-full py-2 px-4 rounded-lg text-xs font-semibold transition ${canVote ? 'border border-dashed border-slate-300 dark:border-slate-600 text-slate-500 hover:bg-red-50 hover:text-red-500' : 'border border-dashed border-slate-200 text-slate-300 cursor-not-allowed'}`;
+  skipBtn.textContent = canAnswer ? 'Пропустить вопрос' : 'Голос за пропуск';
+  skipBtn.disabled = !canVote;
+  skipBtn.onclick = () => {
+    if (canAnswer) {
+      ws.send(JSON.stringify({ action: 'skip' }));
+    } else {
+      ws.send(JSON.stringify({ action: 'vote', choice: 'skip' }));
+    }
+  };
 
-  if (canAnswer) {
-    const skipBtn = document.createElement('button');
-    skipBtn.className = 'col-span-4 py-2 border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 rounded-lg text-xs hover:bg-red-50 hover:text-red-500 transition';
-    skipBtn.textContent = 'Пропустить вопрос (капитан)';
-    skipBtn.onclick = () => ws.send(JSON.stringify({ action: 'skip' }));
-    skipContainer.appendChild(skipVoteBtn);
-    skipContainer.appendChild(skipBtn);
-    answersEl.appendChild(skipContainer);
-  } else {
-    skipContainer.appendChild(skipVoteBtn);
-    answersEl.appendChild(skipContainer);
-  }
-}
-
-function renderVotes(votePercentages) {
-  const entries = Object.entries(votePercentages || {});
-  if (entries.length === 0) {
-    voteStatsEl.textContent = '';
-    return;
-  }
-  voteStatsEl.textContent = entries.map(([choice, pct]) => `${choice === 'skip' ? 'Пропуск' : `Вариант ${choice}`}: ${pct}%`).join(' | ');
+  skipWrapper.appendChild(skipBtn);
+  answersEl.appendChild(skipWrapper);
 }
 
 function teamStatsText(stats) {
@@ -271,7 +266,6 @@ function renderState(state) {
   const isGameplay = state.status === 'in_progress';
   renderTeams(state.players, me, isGameplay);
   renderHostControls(state.players, me, state);
-  renderVotes(state.vote_percentages);
 
   const teamName = state.current_team === 'A' ? 'красная' : 'синяя';
 
@@ -330,7 +324,7 @@ function renderState(state) {
         qText.textContent = state.current_question.text;
         const canVote = me && me.team === state.current_team;
         const canAnswer = canVote && me.is_captain;
-        renderAnswers(state.current_question.options, canAnswer, canVote);
+        renderAnswers(state.current_question.options, canAnswer, canVote, state.vote_percentages);
         if (currentQuestionId !== state.current_question.id) {
           currentQuestionId = state.current_question.id;
           resultEl.textContent = '';
