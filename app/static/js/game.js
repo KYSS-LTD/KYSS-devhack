@@ -29,6 +29,7 @@ let currentQuestionId = null;
 let localTimer = null;
 let leftSeconds = 30;
 let latestState = null;
+let restartPending = false;
 
 function wsUrl(path) {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -184,9 +185,23 @@ function renderState(state) {
     qText.textContent = `PIN комнаты: ${state.pin}. Команды будут назначены случайно после старта.`;
     answersEl.innerHTML = '';
     timerEl.textContent = '';
-    if (me && me.is_host) startBtn.classList.remove('hidden');
+    currentQuestionId = null;
+    saveResultsBtn.classList.add('hidden');
     restartControlsEl.classList.add('hidden');
+    if (me && me.is_host) {
+      startBtn.classList.remove('hidden');
+      startBtn.disabled = false;
+      if (restartPending) {
+        resultEl.textContent = 'Новый матч готов. Нажмите «Начать игру».';
+      }
+    } else {
+      startBtn.classList.add('hidden');
+      resultEl.textContent = '';
+    }
+    restartPending = false;
   } else if (state.phase === 'countdown') {
+    restartPending = false;
+    saveResultsBtn.classList.add('hidden');
     restartControlsEl.classList.add('hidden');
     startBtn.classList.add('hidden');
     turnEl.textContent = 'Игра запускается...';
@@ -194,6 +209,8 @@ function renderState(state) {
     answersEl.innerHTML = '';
     startCountdown(state.countdown_seconds || 3);
   } else if (state.status === 'in_progress') {
+    restartPending = false;
+    saveResultsBtn.classList.add('hidden');
     restartControlsEl.classList.add('hidden');
     startBtn.classList.add('hidden');
     turnEl.textContent = `Сейчас отвечает ${teamName} команда`;
@@ -244,6 +261,12 @@ restartBtn.addEventListener('click', () => {
     resultEl.textContent = 'Введите новую тему для следующей игры';
     return;
   }
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    resultEl.textContent = 'Соединение нестабильно, попробуйте ещё раз через секунду';
+    return;
+  }
+  restartPending = true;
+  restartBtn.disabled = true;
   ws.send(JSON.stringify({
     action: 'host_control',
     control_action: 'restart',
@@ -258,14 +281,21 @@ function connect() {
   ws = new WebSocket(wsUrl(`/ws/${pin}/${player.player_id}`));
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
-    if (msg.type === 'state') renderState(msg.data);
+    if (msg.type === 'state') {
+      restartBtn.disabled = false;
+      renderState(msg.data);
+    }
     if (msg.type === 'answer_result') {
       if (msg.data.timeout) resultEl.textContent = 'Время вышло';
       else if (msg.data.skip) resultEl.textContent = 'Вопрос пропущен';
       else resultEl.textContent = msg.data.correct ? 'Верно!' : `Неверно. Правильный ответ: ${msg.data.correct_option}`;
     }
   };
-  ws.onclose = () => setTimeout(connect, 2000);
+  ws.onclose = () => {
+    restartBtn.disabled = false;
+    if (restartPending) resultEl.textContent = 'Соединение перезапущено, проверьте состояние комнаты';
+    setTimeout(connect, 2000);
+  };
 }
 
 connect();
