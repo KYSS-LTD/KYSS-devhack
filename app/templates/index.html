@@ -134,40 +134,38 @@
     dark:focus:ring-indigo-500/60 transition
   `;
 
-  if (!user) {
-    joinNicknameWrap.innerHTML = `
-      <div>
-        <label class="block text-sm mb-2 text-slate-500 dark:text-slate-400">
-          Никнейм
-        </label>
-        <input id="join-name" type="text"
-               placeholder="Ваш ник"
-               maxlength="80"
-               class="${inputClasses}" />
-      </div>`;
+  const defaultName = user?.username ?? '';
 
-    createHostWrap.innerHTML = `
-      <div>
-        <label class="block text-sm mb-2 text-slate-500 dark:text-slate-400">
-          Имя ведущего
-        </label>
-        <input id="host-name" type="text"
-               placeholder="Ваш ник"
-               maxlength="80"
-               class="${inputClasses}" />
-      </div>`;
-  }
+  joinNicknameWrap.innerHTML = `
+    <div>
+      <label class="block text-sm mb-2 text-slate-500 dark:text-slate-400">
+        Никнейм
+      </label>
+      <input id="join-name" type="text"
+             placeholder="Ваш ник"
+             maxlength="80"
+             value="${defaultName}"
+             class="${inputClasses}" />
+    </div>`;
+
+  createHostWrap.innerHTML = `
+    <div>
+      <label class="block text-sm mb-2 text-slate-500 dark:text-slate-400">
+        Имя ведущего
+      </label>
+      <input id="host-name" type="text"
+             placeholder="Ваш ник"
+             maxlength="80"
+             value="${defaultName}"
+             class="${inputClasses}" />
+    </div>`;
 
   function getJoinName() {
-    return user
-      ? user.username
-      : (document.getElementById('join-name')?.value.trim() ?? '');
+    return document.getElementById('join-name')?.value.trim() ?? '';
   }
 
   function getHostName() {
-    return user
-      ? user.username
-      : (document.getElementById('host-name')?.value.trim() ?? '');
+    return document.getElementById('host-name')?.value.trim() ?? '';
   }
 
 
