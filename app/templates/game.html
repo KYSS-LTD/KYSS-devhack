@@ -22,7 +22,12 @@
       <button id="save-results-btn" class="secondary hidden">Сохранить статистику</button>
     </section>
 
-    <section class="grid-2">
+    <section id="lobby-section" class="card">
+      <h3>Лобби: подключившиеся участники</h3>
+      <ul id="lobby-list"></ul>
+    </section>
+
+    <section id="team-section" class="grid-2 hidden">
       <article class="card">
         <h3>Красная команда</h3>
         <ul id="team-a-list"></ul>
@@ -38,7 +43,12 @@
       <div id="question-text">После старта здесь появится вопрос.</div>
       <div id="vote-stats" class="muted"></div>
       <div id="answers" class="answers"></div>
-      <div id="captain-controls" class="captain-controls"></div>
+      <div id="captain-controls" class="captain-controls hidden">
+        <label>Передать лидерство
+          <select id="captain-select"></select>
+        </label>
+        <button id="transfer-captain-btn" class="secondary">Передать корону</button>
+      </div>
       <p id="answer-result" class="status"></p>
     </section>
 

@@ -8,6 +8,9 @@ const topicEl = document.getElementById('topic');
 const scoreA = document.getElementById('score-a');
 const scoreB = document.getElementById('score-b');
 const turnEl = document.getElementById('turn');
+const teamSection = document.getElementById('team-section');
+const lobbySection = document.getElementById('lobby-section');
+const lobbyList = document.getElementById('lobby-list');
 const teamAList = document.getElementById('team-a-list');
 const teamBList = document.getElementById('team-b-list');
 const qTitle = document.getElementById('question-title');
@@ -19,6 +22,8 @@ const voteStatsEl = document.getElementById('vote-stats');
 const startBtn = document.getElementById('start-btn');
 const saveResultsBtn = document.getElementById('save-results-btn');
 const captainControlsEl = document.getElementById('captain-controls');
+const captainSelectEl = document.getElementById('captain-select');
+const transferCaptainBtn = document.getElementById('transfer-captain-btn');
 const restartControlsEl = document.getElementById('restart-controls');
 const restartTopicEl = document.getElementById('restart-topic');
 const restartDifficultyEl = document.getElementById('restart-difficulty');
@@ -58,13 +63,22 @@ function startQuestionTimer() {
   }, 1000);
 }
 
+function renderLobby(players) {
+  lobbyList.innerHTML = '';
+  players.forEach((p) => {
+    const li = document.createElement('li');
+    li.textContent = `${p.name}${p.is_host ? ' (ведущий)' : ''}`;
+    lobbyList.appendChild(li);
+  });
+}
+
 function renderTeams(players, me) {
   teamAList.innerHTML = '';
   teamBList.innerHTML = '';
-  captainControlsEl.innerHTML = '';
 
   const myTeam = me ? me.team : null;
   const isCaptain = Boolean(me && me.is_captain && myTeam);
+  const candidates = [];
 
   players.forEach((p) => {
     const li = document.createElement('li');
@@ -79,16 +93,27 @@ function renderTeams(players, me) {
     }
 
     if (isCaptain && p.team === myTeam && p.id !== me.id && !p.is_captain) {
-      const btn = document.createElement('button');
-      btn.className = 'secondary';
-      btn.textContent = `Передать корону: ${p.name}`;
-      btn.onclick = () => ws.send(JSON.stringify({ action: 'transfer_captain', to_player_id: p.id }));
-      captainControlsEl.appendChild(btn);
+      candidates.push(p);
     }
   });
 
-  if (!isCaptain || captainControlsEl.childElementCount === 0) {
-    captainControlsEl.textContent = '';
+  captainSelectEl.innerHTML = '';
+  if (isCaptain && candidates.length > 0) {
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Выберите игрока';
+    captainSelectEl.appendChild(placeholder);
+
+    candidates.forEach((candidate) => {
+      const option = document.createElement('option');
+      option.value = String(candidate.id);
+      option.textContent = candidate.name;
+      captainSelectEl.appendChild(option);
+    });
+
+    captainControlsEl.classList.remove('hidden');
+  } else {
+    captainControlsEl.classList.add('hidden');
   }
 }
 
@@ -108,7 +133,6 @@ function renderAnswers(options, canAnswer, canVote) {
     if (canAnswer) {
       const answerBtn = document.createElement('button');
       answerBtn.textContent = `Ответ: ${idx + 1}) ${option}`;
-      answerBtn.disabled = false;
       answerBtn.addEventListener('click', () => ws.send(JSON.stringify({ action: 'answer', option_index: idx + 1 })));
       row.appendChild(answerBtn);
     }
@@ -126,7 +150,6 @@ function renderAnswers(options, canAnswer, canVote) {
   if (canAnswer) {
     const skipBtn = document.createElement('button');
     skipBtn.textContent = 'Пропустить вопрос (капитан)';
-    skipBtn.disabled = false;
     skipBtn.onclick = () => ws.send(JSON.stringify({ action: 'skip' }));
     answersEl.appendChild(skipBtn);
   }
@@ -141,11 +164,15 @@ function renderVotes(votePercentages) {
   voteStatsEl.textContent = entries.map(([choice, pct]) => `${choice === 'skip' ? 'Пропуск' : `Вариант ${choice}`}: ${pct}%`).join(' | ');
 }
 
+function teamStatsText(stats) {
+  return `Верно: ${stats.correct}, Неверно: ${stats.incorrect}, Таймаут: ${stats.timeout}, Бонус скорости: +${stats.speed_bonus}`;
+}
+
 function downloadResults(state) {
   const winner = state.winner === 'draw' ? 'Ничья' : state.winner === 'A' ? 'Красная команда' : 'Синяя команда';
   const rows = [
     '===========================================',
-    `             QUIZBATTLE REPORT             `,
+    '             QUIZBATTLE REPORT             ',
     '===========================================',
     `Комната: ${state.pin}`,
     `Тема: ${state.topic}`,
@@ -153,13 +180,9 @@ function downloadResults(state) {
     `Итоговый счёт: Красные ${state.score_a} : Синие ${state.score_b}`,
     `Победитель: ${winner}`,
     '',
-    'Состав команд:',
-    `  Красные: ${state.players.filter((p) => p.team === 'A').map((p) => `${p.name}${p.is_captain ? ' 👑' : ''}`).join(', ') || '—'}`,
-    `  Синие: ${state.players.filter((p) => p.team === 'B').map((p) => `${p.name}${p.is_captain ? ' 👑' : ''}`).join(', ') || '—'}`,
-    '',
     'Командная статистика:',
-    `  Красные: верно ${state.team_stats.A.correct}, неверно ${state.team_stats.A.incorrect}, таймаут ${state.team_stats.A.timeout}, бонус скорости +${state.team_stats.A.speed_bonus}`,
-    `  Синие:   верно ${state.team_stats.B.correct}, неверно ${state.team_stats.B.incorrect}, таймаут ${state.team_stats.B.timeout}, бонус скорости +${state.team_stats.B.speed_bonus}`,
+    `  Красные: ${teamStatsText(state.team_stats.A)}`,
+    `  Синие: ${teamStatsText(state.team_stats.B)}`,
     '===========================================',
   ];
   const blob = new Blob([rows.join('\n')], { type: 'text/plain;charset=utf-8' });
@@ -169,20 +192,35 @@ function downloadResults(state) {
   a.click();
 }
 
+function renderResultSummary(state) {
+  const winner = state.winner === 'draw' ? 'Ничья' : state.winner === 'A' ? 'Красная команда' : 'Синяя команда';
+  resultEl.innerHTML = [
+    `<strong>Победитель:</strong> ${winner}`,
+    `<strong>Итоговый счёт:</strong> Красные ${state.score_a} : Синие ${state.score_b}`,
+    `<strong>Красные:</strong> ${teamStatsText(state.team_stats.A)}`,
+    `<strong>Синие:</strong> ${teamStatsText(state.team_stats.B)}`,
+  ].join('<br>');
+}
+
 function renderState(state) {
   latestState = state;
   topicEl.textContent = `Тема: ${state.topic} (${state.difficulty})`;
   scoreA.textContent = state.score_a;
   scoreB.textContent = state.score_b;
   const me = state.players.find((p) => p.id === player.player_id);
+
+  renderLobby(state.players);
   renderTeams(state.players, me);
   renderVotes(state.vote_percentages);
 
   const teamName = state.current_team === 'A' ? 'красная' : 'синяя';
 
   if (state.status === 'waiting') {
-    turnEl.textContent = 'Период подключения: ждём участников';
-    qText.textContent = `PIN комнаты: ${state.pin}. Команды будут назначены случайно после старта.`;
+    lobbySection.classList.remove('hidden');
+    teamSection.classList.add('hidden');
+    captainControlsEl.classList.add('hidden');
+    turnEl.textContent = 'Период подключения: участники в лобби';
+    qText.textContent = `PIN комнаты: ${state.pin}. После старта игроки автоматически будут распределены по командам.`;
     answersEl.innerHTML = '';
     timerEl.textContent = '';
     currentQuestionId = null;
@@ -200,6 +238,8 @@ function renderState(state) {
     }
     restartPending = false;
   } else if (state.phase === 'countdown') {
+    lobbySection.classList.add('hidden');
+    teamSection.classList.remove('hidden');
     restartPending = false;
     saveResultsBtn.classList.add('hidden');
     restartControlsEl.classList.add('hidden');
@@ -209,6 +249,8 @@ function renderState(state) {
     answersEl.innerHTML = '';
     startCountdown(state.countdown_seconds || 3);
   } else if (state.status === 'in_progress') {
+    lobbySection.classList.add('hidden');
+    teamSection.classList.remove('hidden');
     restartPending = false;
     saveResultsBtn.classList.add('hidden');
     restartControlsEl.classList.add('hidden');
@@ -227,14 +269,17 @@ function renderState(state) {
       }
     }
   } else {
+    lobbySection.classList.add('hidden');
+    teamSection.classList.remove('hidden');
+    captainControlsEl.classList.add('hidden');
     turnEl.textContent = 'Игра завершена';
     clearInterval(localTimer);
     timerEl.textContent = '';
     answersEl.innerHTML = '';
     saveResultsBtn.classList.remove('hidden');
     if (me && me.is_host) restartControlsEl.classList.remove('hidden');
-    qText.textContent = state.winner === 'draw' ? 'Ничья! Отличная игра.' : `Победила ${state.winner === 'A' ? 'красная' : 'синяя'} команда!`;
-    resultEl.textContent = `Красные: ${JSON.stringify(state.team_stats.A)} | Синие: ${JSON.stringify(state.team_stats.B)}`;
+    qText.textContent = 'Матч окончен.';
+    renderResultSummary(state);
   }
 }
 
@@ -242,7 +287,9 @@ startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
   try {
     const res = await fetch(`/games/${pin}/start`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host_player_id: player.player_id }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ host_player_id: player.player_id }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Не удалось стартовать');
@@ -254,6 +301,15 @@ startBtn.addEventListener('click', async () => {
 
 saveResultsBtn.addEventListener('click', () => {
   if (latestState) downloadResults(latestState);
+});
+
+transferCaptainBtn.addEventListener('click', () => {
+  const selected = captainSelectEl.value;
+  if (!selected) {
+    resultEl.textContent = 'Выберите игрока для передачи лидерства';
+    return;
+  }
+  ws.send(JSON.stringify({ action: 'transfer_captain', to_player_id: Number(selected) }));
 });
 
 restartBtn.addEventListener('click', () => {
