@@ -157,12 +157,10 @@ docker compose ps
 ## 🔐 Переменные окружения (AI)
 
 ```bash
-export GIGACHAT_AUTH_KEY=""
-export GIGACHAT_SCOPE="GIGACHAT_API_PERS"
-export GIGACHAT_MODEL="GigaChat"
-export GIGACHAT_API_BASE="https://gigachat.devices.sberbank.ru/api/v1"
-export GIGACHAT_AUTH_URL="https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
-export GIGACHAT_VERIFY_SSL="false"
+TIMEWEB_API_KEY="YOUR_KEY_HERE"
+TIMEWEB_API_BASE=https://agent.timeweb.cloud/api/v1/cloud-ai/agents/696c108a-b9f3-4c1b-ad84-bf2209a2168f/v1
+TIMEWEB_MODEL=grok-4-fast
+TIMEWEB_TIMEOUT=40
 ```
 
 Если AI недоступен — автоматически используются запасные вопросы.
