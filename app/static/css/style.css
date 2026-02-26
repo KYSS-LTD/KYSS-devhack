@@ -89,3 +89,5 @@ ul { margin: 0; padding-left: 18px; }
   .topbar { padding: 12px; }
   .grid-2, .game-layout, .grid-3 { padding: 12px; }
 }
+
+.answer-row { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }

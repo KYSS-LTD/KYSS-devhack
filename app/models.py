@@ -63,6 +63,9 @@ class Game(Base):
     score_a: Mapped[int] = mapped_column(Integer, default=0)
     score_b: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    difficulty: Mapped[str] = mapped_column(String(16), default="medium")
+    phase: Mapped[str] = mapped_column(String(32), default="gathering")
+    question_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Связи
     players: Mapped[list["Player"]] = relationship(
@@ -98,8 +101,9 @@ class Player(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     name: Mapped[str] = mapped_column(String(80))
-    team: Mapped[str] = mapped_column(String(1))
+    team: Mapped[str | None] = mapped_column(String(1), nullable=True)
     is_host: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_captain: Mapped[bool] = mapped_column(Boolean, default=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

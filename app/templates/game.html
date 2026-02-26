@@ -19,15 +19,16 @@
       <p id="turn" class="status">Ожидание состояния игры...</p>
       <p id="timer" class="timer"></p>
       <button id="start-btn" class="hidden">Начать игру</button>
+      <button id="save-results-btn" class="secondary hidden">Сохранить статистику</button>
     </section>
 
     <section class="grid-2">
       <article class="card">
-        <h3>Команда A (красные)</h3>
+        <h3>Красная команда</h3>
         <ul id="team-a-list"></ul>
       </article>
       <article class="card">
-        <h3>Команда B (синие)</h3>
+        <h3>Синяя команда</h3>
         <ul id="team-b-list"></ul>
       </article>
     </section>
@@ -35,6 +36,7 @@
     <section class="card">
       <h3 id="question-title">Вопрос</h3>
       <div id="question-text">После старта здесь появится вопрос.</div>
+      <div id="vote-stats" class="muted"></div>
       <div id="answers" class="answers"></div>
       <p id="answer-result" class="status"></p>
     </section>

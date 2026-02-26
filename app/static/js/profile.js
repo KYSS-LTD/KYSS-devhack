@@ -26,7 +26,7 @@ async function loadProfile() {
     document.getElementById('wins').textContent = data.wins;
     document.getElementById('win-rate').textContent = `${data.win_rate}%`;
     document.getElementById('avg-score').textContent = data.average_team_score;
-    document.getElementById('favorite-team').textContent = data.favorite_team || '-';
+    document.getElementById('favorite-team').textContent = data.favorite_team === 'A' ? 'Красная' : data.favorite_team === 'B' ? 'Синяя' : '-';
 
     topicsEl.innerHTML = '';
     if (data.recent_topics.length === 0) {
