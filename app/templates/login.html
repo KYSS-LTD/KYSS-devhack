@@ -4,26 +4,58 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>QuizBattle — Вход</title>
-  <link rel="stylesheet" href="/static/css/style.css" />
+  <script>
+    (function () {
+      const saved = localStorage.getItem('qb_theme');
+      if (saved === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else if (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class' };
+  </script>
 </head>
-<body>
-  <main class="auth-container">
-    <section class="card auth-card">
-      <h1>Вход</h1>
-      <p class="muted">Войди, чтобы создавать комнаты и играть.</p>
-      <form id="login-form" class="stack">
-        <label>Логин
-          <input name="username" type="text" required minlength="3" maxlength="50" />
+<body class="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors" style="background: center/cover no-repeat fixed;">
+  <main class="min-h-screen grid place-items-center px-4">
+    <section class="w-full max-w-md rounded-3xl border border-white/40 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-2xl p-8">
+      <div class="flex items-center justify-between mb-4">
+        <h1 class="text-3xl font-bold">Вход</h1>
+        <button id="theme-toggle" type="button" class="rounded-xl bg-white/90 dark:bg-slate-800 px-3 py-2 text-xs font-medium">Тема</button>
+      </div>
+      <p class="text-slate-500 dark:text-slate-400 mb-6">Войди, чтобы создавать комнаты и играть.</p>
+      <form id="login-form" class="space-y-4">
+        <label class="block text-sm font-medium">Логин
+          <input class="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400" name="username" type="text" required minlength="3" maxlength="50" />
         </label>
-        <label>Пароль
-          <input name="password" type="password" required minlength="6" maxlength="128" />
+        <label class="block text-sm font-medium">Пароль
+          <input class="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400" name="password" type="password" required minlength="6" maxlength="128" />
         </label>
-        <button type="submit">Войти</button>
+        <button class="w-full rounded-xl bg-indigo-600 text-white py-3 font-semibold hover:bg-indigo-500 transition" type="submit">Войти</button>
       </form>
-      <p id="login-msg" class="status"></p>
-      <p class="muted">Нет аккаунта? <a href="/register">Регистрация</a></p>
+      <p id="login-msg" class="mt-3 text-sm text-rose-600"></p>
+      <p class="mt-6 text-sm text-slate-500 dark:text-slate-400">Нет аккаунта? <a class="text-indigo-600 font-medium" href="/register">Регистрация</a></p>
     </section>
   </main>
   <script src="/static/js/login.js"></script>
+  <script>
+    (function () {
+      const btn = document.getElementById('theme-toggle');
+      const apply = () => {
+        const isDark = document.documentElement.classList.contains('dark');
+        document.body.style.backgroundImage = isDark ? "url('/static/imgs/bg.png')" : "url('/static/imgs/bg_light.png')";
+      };
+      btn?.addEventListener('click', () => {
+        const nextDark = !document.documentElement.classList.contains('dark');
+        document.documentElement.classList.toggle('dark', nextDark);
+        localStorage.setItem('qb_theme', nextDark ? 'dark' : 'light');
+        apply();
+      });
+      apply();
+    })();
+  </script>
 </body>
 </html>
