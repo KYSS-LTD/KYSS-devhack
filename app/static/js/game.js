@@ -67,10 +67,10 @@ function startCountdown(seconds) {
   }, 1000);
 }
 
-function startQuestionTimer() {
+function startQuestionTimer(seconds = 30) {
   clearInterval(localTimer);
-  leftSeconds = 30;
-  timerEl.textContent = `Осталось: ${leftSeconds} сек`;
+  leftSeconds = Math.max(0, Number(seconds) || 30);
+  timerEl.textContent = leftSeconds > 0 ? `Осталось: ${leftSeconds} сек` : 'Время вышло';
   localTimer = setInterval(() => {
     leftSeconds -= 1;
     timerEl.textContent = leftSeconds > 0 ? `Осталось: ${leftSeconds} сек` : 'Время вышло';
@@ -346,6 +346,7 @@ function renderState(state) {
     if (state.phase === 'paused') {
       turnEl.textContent = 'Игра на паузе';
       answersEl.innerHTML = '';
+      clearInterval(localTimer);
       timerEl.textContent = 'Пауза';
     } else {
       turnEl.textContent = `Сейчас отвечает ${teamName} команда`;
@@ -358,7 +359,9 @@ function renderState(state) {
         if (currentQuestionId !== state.current_question.id) {
           currentQuestionId = state.current_question.id;
           resultEl.textContent = '';
-          startQuestionTimer();
+          startQuestionTimer(state.question_seconds_left ?? 30);
+        } else if ((!localTimer || leftSeconds <= 0) && state.question_seconds_left !== null && state.question_seconds_left !== undefined) {
+          startQuestionTimer(state.question_seconds_left);
         }
       }
     }
