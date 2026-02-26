@@ -38,7 +38,24 @@
       <div id="question-text">После старта здесь появится вопрос.</div>
       <div id="vote-stats" class="muted"></div>
       <div id="answers" class="answers"></div>
+      <div id="captain-controls" class="captain-controls"></div>
       <p id="answer-result" class="status"></p>
+    </section>
+
+    <section id="restart-controls" class="card hidden">
+      <h3>Новый матч</h3>
+      <p class="muted">Только ведущий может выбрать новую тему и продолжить игру в этой же комнате.</p>
+      <label>Новая тема
+        <input id="restart-topic" type="text" placeholder="Например: Фильмы 2000-х" />
+      </label>
+      <label>Сложность
+        <select id="restart-difficulty">
+          <option value="easy">Простой</option>
+          <option value="medium" selected>Средний</option>
+          <option value="hard">Сложный</option>
+        </select>
+      </label>
+      <button id="restart-btn">Продолжить с новой темой</button>
     </section>
   </main>
 

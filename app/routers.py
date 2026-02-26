@@ -156,7 +156,15 @@ async def game_socket(websocket: WebSocket, pin: str, player_id: int):
             elif action == "transfer_captain":
                 await game_service.transfer_captain(db, pin, from_player_id=player_id, to_player_id=int(message.get("to_player_id")))
             elif action == "host_control":
-                await game_service.host_control(db, pin, host_player_id=player_id, action=str(message.get("control_action")), target_player_id=message.get("target_player_id"))
+                await game_service.host_control(
+                    db,
+                    pin,
+                    host_player_id=player_id,
+                    action=str(message.get("control_action")),
+                    target_player_id=message.get("target_player_id"),
+                    topic=message.get("topic"),
+                    difficulty=message.get("difficulty"),
+                )
             elif action == "ping":
                 await websocket.send_json({"type": "pong"})
     except WebSocketDisconnect:
