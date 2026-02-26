@@ -24,6 +24,12 @@ const saveResultsBtn = document.getElementById('save-results-btn');
 const captainControlsEl = document.getElementById('captain-controls');
 const captainSelectEl = document.getElementById('captain-select');
 const transferCaptainBtn = document.getElementById('transfer-captain-btn');
+const hostControlsEl = document.getElementById('host-controls');
+const pauseBtn = document.getElementById('pause-btn');
+const resumeBtn = document.getElementById('resume-btn');
+const nextQuestionBtn = document.getElementById('next-question-btn');
+const kickPlayerSelectEl = document.getElementById('kick-player-select');
+const kickBtn = document.getElementById('kick-btn');
 const restartControlsEl = document.getElementById('restart-controls');
 const restartTopicEl = document.getElementById('restart-topic');
 const restartDifficultyEl = document.getElementById('restart-difficulty');
@@ -39,6 +45,15 @@ let restartPending = false;
 function wsUrl(path) {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   return `${proto}://${location.host}${path}`;
+}
+
+function sendHostControl(controlAction, targetPlayerId = null) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({
+    action: 'host_control',
+    control_action: controlAction,
+    target_player_id: targetPlayerId,
+  }));
 }
 
 function startCountdown(seconds) {
@@ -72,7 +87,7 @@ function renderLobby(players) {
   });
 }
 
-function renderTeams(players, me) {
+function renderTeams(players, me, allowCaptainControls) {
   teamAList.innerHTML = '';
   teamBList.innerHTML = '';
 
@@ -98,7 +113,7 @@ function renderTeams(players, me) {
   });
 
   captainSelectEl.innerHTML = '';
-  if (isCaptain && candidates.length > 0) {
+  if (allowCaptainControls && isCaptain && candidates.length > 0) {
     const placeholder = document.createElement('option');
     placeholder.value = '';
     placeholder.textContent = 'Выберите игрока';
@@ -115,6 +130,34 @@ function renderTeams(players, me) {
   } else {
     captainControlsEl.classList.add('hidden');
   }
+}
+
+function renderHostControls(players, me, state) {
+  if (!me || !me.is_host || state.status !== 'in_progress') {
+    hostControlsEl.classList.add('hidden');
+    return;
+  }
+
+  hostControlsEl.classList.remove('hidden');
+  pauseBtn.disabled = state.phase === 'paused';
+  resumeBtn.disabled = state.phase !== 'paused';
+  nextQuestionBtn.disabled = state.phase !== 'question';
+
+  const candidates = players.filter((p) => p.id !== me.id);
+  kickPlayerSelectEl.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = candidates.length > 0 ? 'Выберите игрока' : 'Нет игроков для кика';
+  kickPlayerSelectEl.appendChild(placeholder);
+
+  candidates.forEach((candidate) => {
+    const option = document.createElement('option');
+    option.value = String(candidate.id);
+    option.textContent = `${candidate.name}${candidate.team ? ` (${candidate.team === 'A' ? 'красная' : 'синяя'})` : ''}`;
+    kickPlayerSelectEl.appendChild(option);
+  });
+
+  kickBtn.disabled = candidates.length === 0;
 }
 
 function renderAnswers(options, canAnswer, canVote) {
@@ -210,7 +253,9 @@ function renderState(state) {
   const me = state.players.find((p) => p.id === player.player_id);
 
   renderLobby(state.players);
-  renderTeams(state.players, me);
+  const isGameplay = state.status === 'in_progress';
+  renderTeams(state.players, me, isGameplay);
+  renderHostControls(state.players, me, state);
   renderVotes(state.vote_percentages);
 
   const teamName = state.current_team === 'A' ? 'красная' : 'синяя';
@@ -219,6 +264,7 @@ function renderState(state) {
     lobbySection.classList.remove('hidden');
     teamSection.classList.add('hidden');
     captainControlsEl.classList.add('hidden');
+    hostControlsEl.classList.add('hidden');
     turnEl.textContent = 'Период подключения: участники в лобби';
     qText.textContent = `PIN комнаты: ${state.pin}. После старта игроки автоматически будут распределены по командам.`;
     answersEl.innerHTML = '';
@@ -240,6 +286,8 @@ function renderState(state) {
   } else if (state.phase === 'countdown') {
     lobbySection.classList.add('hidden');
     teamSection.classList.remove('hidden');
+    captainControlsEl.classList.add('hidden');
+    hostControlsEl.classList.add('hidden');
     restartPending = false;
     saveResultsBtn.classList.add('hidden');
     restartControlsEl.classList.add('hidden');
@@ -255,23 +303,31 @@ function renderState(state) {
     saveResultsBtn.classList.add('hidden');
     restartControlsEl.classList.add('hidden');
     startBtn.classList.add('hidden');
-    turnEl.textContent = `Сейчас отвечает ${teamName} команда`;
-    if (state.current_question) {
-      qTitle.textContent = `Раунд ${state.current_question.order_index + 1}`;
-      qText.textContent = state.current_question.text;
-      const canVote = me && me.team === state.current_team;
-      const canAnswer = canVote && me.is_captain;
-      renderAnswers(state.current_question.options, canAnswer, canVote);
-      if (currentQuestionId !== state.current_question.id) {
-        currentQuestionId = state.current_question.id;
-        resultEl.textContent = '';
-        startQuestionTimer();
+
+    if (state.phase === 'paused') {
+      turnEl.textContent = 'Игра на паузе';
+      answersEl.innerHTML = '';
+      timerEl.textContent = 'Пауза';
+    } else {
+      turnEl.textContent = `Сейчас отвечает ${teamName} команда`;
+      if (state.current_question) {
+        qTitle.textContent = `Раунд ${state.current_question.order_index + 1}`;
+        qText.textContent = state.current_question.text;
+        const canVote = me && me.team === state.current_team;
+        const canAnswer = canVote && me.is_captain;
+        renderAnswers(state.current_question.options, canAnswer, canVote);
+        if (currentQuestionId !== state.current_question.id) {
+          currentQuestionId = state.current_question.id;
+          resultEl.textContent = '';
+          startQuestionTimer();
+        }
       }
     }
   } else {
     lobbySection.classList.add('hidden');
     teamSection.classList.remove('hidden');
     captainControlsEl.classList.add('hidden');
+    hostControlsEl.classList.add('hidden');
     turnEl.textContent = 'Игра завершена';
     clearInterval(localTimer);
     timerEl.textContent = '';
@@ -310,6 +366,18 @@ transferCaptainBtn.addEventListener('click', () => {
     return;
   }
   ws.send(JSON.stringify({ action: 'transfer_captain', to_player_id: Number(selected) }));
+});
+
+pauseBtn.addEventListener('click', () => sendHostControl('pause'));
+resumeBtn.addEventListener('click', () => sendHostControl('resume'));
+nextQuestionBtn.addEventListener('click', () => sendHostControl('next_question'));
+kickBtn.addEventListener('click', () => {
+  const selected = kickPlayerSelectEl.value;
+  if (!selected) {
+    resultEl.textContent = 'Выберите игрока для кика';
+    return;
+  }
+  sendHostControl('kick', Number(selected));
 });
 
 restartBtn.addEventListener('click', () => {
