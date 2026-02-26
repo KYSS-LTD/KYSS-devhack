@@ -68,7 +68,15 @@ class GameService:
             if not db.query(Game).filter(Game.pin == pin, Game.status != "finished").first():
                 return pin
 
-    def create_game(self, db: Session, host_name: str, topic: str, questions_per_team: int, user_id: int | None, difficulty: str) -> tuple[Game, Player]:
+    def create_game(
+        self,
+        db: Session,
+        host_name: str,
+        topic: str,
+        questions_per_team: int,
+        user_id: int | None,
+        difficulty: str = "medium",
+    ) -> tuple[Game, Player]:
         pin = self.generate_pin(db)
         game = Game(pin=pin, topic=topic, questions_per_team=questions_per_team, status="waiting", difficulty=difficulty, phase="gathering")
         db.add(game)
@@ -167,8 +175,23 @@ class GameService:
         if game.status != "waiting":
             raise HTTPException(status_code=400, detail="Game already started")
 
+        players = (
+            db.query(Player)
+            .filter(Player.game_id == game.id, Player.active.is_(True))
+            .all()
+        )
+        if len(players) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail="Для старта нужен минимум 1 игрок в каждой команде",
+            )
+
         self._assign_teams_and_captains(db, game)
-        players = db.query(Player).filter(Player.game_id == game.id, Player.active.is_(True)).all()
+        players = (
+            db.query(Player)
+            .filter(Player.game_id == game.id, Player.active.is_(True))
+            .all()
+        )
         teams = Counter([p.team for p in players])
         if teams.get("A", 0) == 0 or teams.get("B", 0) == 0:
             raise HTTPException(status_code=400, detail="Для старта нужен минимум 1 игрок в каждой команде")
@@ -236,14 +259,23 @@ class GameService:
         db.commit()
         await self.broadcast_state(db, game)
 
-    async def process_answer(self, db: Session, pin: str, player_id: int | None, option_index: int | None, timeout: bool = False, skip: bool = False) -> None:
+    async def process_answer(
+        self,
+        db: Session,
+        pin: str,
+        player_id: int | None,
+        option_index: int | None,
+        timeout: bool = False,
+        skip: bool = False,
+        system_action: bool = False,
+    ) -> None:
         game = self.get_game(db, pin)
         if game.status != "in_progress" or game.phase != "question":
             return
         question = self.get_current_question(db, game)
         if not question or question.answered:
             return
-        if not timeout:
+        if not timeout and not system_action:
             player = db.query(Player).filter(Player.id == player_id, Player.game_id == game.id, Player.active.is_(True)).first()
             if not player:
                 raise HTTPException(status_code=404, detail="Player not found")
@@ -313,7 +345,14 @@ class GameService:
             game.phase = "question"
             await self.start_timer(pin, game.difficulty)
         elif action == "next_question":
-            await self.process_answer(db, pin, player_id=host_player_id, option_index=None, skip=True)
+            await self.process_answer(
+                db,
+                pin,
+                player_id=host_player_id,
+                option_index=None,
+                skip=True,
+                system_action=True,
+            )
             return
         elif action == "kick" and target_player_id:
             target = db.query(Player).filter(Player.id == target_player_id, Player.game_id == game.id).first()
