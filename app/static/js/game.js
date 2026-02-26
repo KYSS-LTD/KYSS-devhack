@@ -41,6 +41,7 @@ let localTimer = null;
 let leftSeconds = 30;
 let latestState = null;
 let restartPending = false;
+let previousPhase = null;
 
 function wsUrl(path) {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -285,6 +286,8 @@ function renderResultSummary(state) {
 }
 
 function renderState(state) {
+  const prevPhase = previousPhase;
+  previousPhase = state.phase;
   latestState = state;
   topicEl.textContent = `Тема: ${state.topic} (${state.difficulty})`;
   scoreA.textContent = state.score_a;
@@ -363,7 +366,7 @@ function renderState(state) {
           currentQuestionId = state.current_question.id;
           resultEl.textContent = '';
           startQuestionTimer(state.question_seconds_left ?? 30);
-        } else if ((!localTimer || leftSeconds <= 0) && state.question_seconds_left !== null && state.question_seconds_left !== undefined) {
+        } else if ((prevPhase === 'paused' || !localTimer || leftSeconds <= 0) && state.question_seconds_left !== null && state.question_seconds_left !== undefined) {
           startQuestionTimer(state.question_seconds_left);
         }
       }
