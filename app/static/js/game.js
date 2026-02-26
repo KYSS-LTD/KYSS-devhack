@@ -67,9 +67,9 @@ function startCountdown(seconds) {
   }, 1000);
 }
 
-function startQuestionTimer() {
+function startQuestionTimer(initialSeconds = 30) {
   clearInterval(localTimer);
-  leftSeconds = 30;
+  leftSeconds = initialSeconds;
   timerEl.textContent = `Осталось: ${leftSeconds} сек`;
   localTimer = setInterval(() => {
     leftSeconds -= 1;
@@ -164,11 +164,21 @@ function renderHostControls(players, me, state) {
   kickBtn.disabled = candidates.length === 0;
 }
 
-function renderAnswers(options, canAnswer, canVote) {
+function renderAnswers(options, canAnswer, canVote, votePercentages = {}) {
   answersEl.innerHTML = '';
   options.forEach((option, idx) => {
     const container = document.createElement('div');
-    container.className = 'grid grid-cols-5 gap-2 mb-2';
+    container.className = 'rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden';
+
+    const optionKey = String(idx + 1);
+    const voteBar = document.createElement('div');
+    voteBar.className = 'px-3 py-1 text-[10px] uppercase tracking-wide font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-100/80 dark:bg-indigo-900/40 min-h-[22px]';
+    const percentage = votePercentages[optionKey] || 0;
+    voteBar.textContent = percentage > 0 ? `Голоса команды: ${percentage}%` : '';
+    container.appendChild(voteBar);
+
+    const row = document.createElement('div');
+    row.className = 'grid grid-cols-5 gap-2 p-2';
 
     // Кнопка голосования (маленькая слева)
     const voteBtn = document.createElement('button');
@@ -184,14 +194,21 @@ function renderAnswers(options, canAnswer, canVote) {
     answerBtn.disabled = !canAnswer;
     answerBtn.onclick = () => ws.send(JSON.stringify({ action: 'answer', option_index: idx + 1 }));
 
-    container.appendChild(voteBtn);
-    container.appendChild(answerBtn);
+    row.appendChild(voteBtn);
+    row.appendChild(answerBtn);
+    container.appendChild(row);
     answersEl.appendChild(container);
   });
 
   // Кнопки пропуска
   const skipContainer = document.createElement('div');
   skipContainer.className = 'grid grid-cols-5 gap-2 mt-4';
+
+  const skipVoteInfo = document.createElement('div');
+  skipVoteInfo.className = 'col-span-5 text-[10px] uppercase tracking-wide font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-100/80 dark:bg-indigo-900/40 rounded-lg px-3 py-1';
+  const skipPct = votePercentages.skip || 0;
+  skipVoteInfo.textContent = skipPct > 0 ? `Голоса за пропуск: ${skipPct}%` : '';
+  if (skipPct > 0) skipContainer.appendChild(skipVoteInfo);
 
   const skipVoteBtn = document.createElement('button');
   skipVoteBtn.className = 'col-span-1 py-2 rounded-lg text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-500 transition uppercase font-bold';
@@ -320,21 +337,25 @@ function renderState(state) {
     startBtn.classList.add('hidden');
 
     if (state.phase === 'paused') {
+      clearInterval(localTimer);
       turnEl.textContent = 'Игра на паузе';
       answersEl.innerHTML = '';
-      timerEl.textContent = 'Пауза';
+      const pausedSeconds = typeof state.question_seconds_left === 'number' ? state.question_seconds_left : leftSeconds;
+      timerEl.textContent = `Пауза (${pausedSeconds} сек)`;
     } else {
       turnEl.textContent = `Сейчас отвечает ${teamName} команда`;
       if (state.current_question) {
         qTitle.textContent = `Раунд ${state.current_question.order_index + 1}`;
         qText.textContent = state.current_question.text;
-        const canVote = me && me.team === state.current_team;
+        const canVote = Boolean(me && me.team === state.current_team);
         const canAnswer = canVote && me.is_captain;
-        renderAnswers(state.current_question.options, canAnswer, canVote);
+        renderAnswers(state.current_question.options, canAnswer, canVote, state.vote_percentages || {});
         if (currentQuestionId !== state.current_question.id) {
           currentQuestionId = state.current_question.id;
           resultEl.textContent = '';
-          startQuestionTimer();
+          startQuestionTimer(state.question_seconds_left || 30);
+        } else if (typeof state.question_seconds_left === 'number' && Math.abs(leftSeconds - state.question_seconds_left) > 2) {
+          startQuestionTimer(state.question_seconds_left);
         }
       }
     }

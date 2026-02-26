@@ -4,7 +4,7 @@ import asyncio
 import random
 import string
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, WebSocket
 from sqlalchemy.orm import Session
@@ -53,6 +53,8 @@ class GameService:
     def __init__(self) -> None:
         self.manager = ConnectionManager()
         self.timer_tasks: dict[str, asyncio.Task] = {}
+        self.question_deadlines: dict[str, datetime] = {}
+        self.remaining_seconds: dict[str, int] = {}
         self.votes: dict[str, dict[int, str]] = defaultdict(dict)
         self.team_stats: dict[str, dict[str, dict[str, int]]] = defaultdict(
             lambda: {
@@ -168,6 +170,17 @@ class GameService:
         winner = None
         if game.status == "finished":
             winner = "A" if game.score_a > game.score_b else "B" if game.score_b > game.score_a else "draw"
+
+        seconds_left = None
+        if game.phase == "question":
+            deadline = self.question_deadlines.get(game.pin)
+            if deadline:
+                seconds_left = max(0, int((deadline - datetime.now(timezone.utc)).total_seconds()))
+            else:
+                seconds_left = BASE_QUESTION_TIMEOUT.get(game.difficulty, 30)
+        elif game.phase == "paused":
+            seconds_left = self.remaining_seconds.get(game.pin, BASE_QUESTION_TIMEOUT.get(game.difficulty, 30))
+
         return GameStateOut(
             pin=game.pin,
             topic=game.topic,
@@ -187,6 +200,7 @@ class GameService:
                 "B": TeamStats(**self.team_stats[game.pin]["B"]),
             },
             vote_percentages=self._vote_percentages(db, game),
+            question_seconds_left=seconds_left,
         )
 
     async def broadcast_state(self, db: Session, game: Game) -> None:
@@ -237,20 +251,24 @@ class GameService:
 
         game.phase = "question"
         game.question_started_at = datetime.now(timezone.utc)
+        self.remaining_seconds[game.pin] = BASE_QUESTION_TIMEOUT.get(game.difficulty, 30)
         db.commit()
         db.refresh(game)
         await self.broadcast_state(db, game)
-        await self.start_timer(game.pin, game.difficulty)
+        await self.start_timer(game.pin, game.difficulty, self.remaining_seconds[game.pin])
         return game
 
-    async def start_timer(self, pin: str, difficulty: str) -> None:
+    async def start_timer(self, pin: str, difficulty: str, duration: int | None = None) -> None:
         existing = self.timer_tasks.get(pin)
         if existing and not existing.done():
             existing.cancel()
 
         async def timer_coroutine() -> None:
             try:
-                await asyncio.sleep(BASE_QUESTION_TIMEOUT.get(difficulty, 30))
+                timeout_seconds = duration if duration is not None else BASE_QUESTION_TIMEOUT.get(difficulty, 30)
+                self.remaining_seconds[pin] = timeout_seconds
+                self.question_deadlines[pin] = datetime.now(timezone.utc) + timedelta(seconds=timeout_seconds)
+                await asyncio.sleep(timeout_seconds)
                 local_db = SessionLocal()
                 try:
                     game = self.get_game(local_db, pin)
@@ -340,6 +358,7 @@ class GameService:
             game.current_team = "A"
 
         self.votes[pin] = {}
+        self.question_deadlines.pop(pin, None)
 
         if game.current_index_a >= game.questions_per_team and game.current_index_b >= game.questions_per_team:
             game.status = "finished"
@@ -348,13 +367,16 @@ class GameService:
         else:
             game.phase = "question"
             game.question_started_at = datetime.now(timezone.utc)
+            self.remaining_seconds[pin] = BASE_QUESTION_TIMEOUT.get(game.difficulty, 30)
 
         db.commit()
         db.refresh(game)
         await self.manager.broadcast(pin, {"type": "answer_result", "data": {"timeout": timeout, "skip": skip, "correct": is_correct, "correct_option": question.correct_option, "team": question.team, "question_id": question.id}})
         await self.broadcast_state(db, game)
         if game.status == "in_progress":
-            await self.start_timer(pin, game.difficulty)
+            await self.start_timer(pin, game.difficulty, self.remaining_seconds.get(pin))
+        else:
+            self.remaining_seconds.pop(pin, None)
 
     async def host_control(
         self,
@@ -371,13 +393,24 @@ class GameService:
         if not host or not host.is_host:
             raise HTTPException(status_code=403, detail="Only host")
         if action == "pause":
+            if game.phase != "question":
+                raise HTTPException(status_code=400, detail="Pause available only during question")
+            deadline = self.question_deadlines.get(pin)
+            remaining = BASE_QUESTION_TIMEOUT.get(game.difficulty, 30)
+            if deadline:
+                remaining = max(1, int((deadline - datetime.now(timezone.utc)).total_seconds()))
+            self.remaining_seconds[pin] = remaining
             game.phase = "paused"
             task = self.timer_tasks.get(pin)
             if task and not task.done():
                 task.cancel()
+            self.question_deadlines.pop(pin, None)
         elif action == "resume":
+            if game.phase != "paused":
+                raise HTTPException(status_code=400, detail="Resume available only after pause")
             game.phase = "question"
-            await self.start_timer(pin, game.difficulty)
+            game.question_started_at = datetime.now(timezone.utc)
+            await self.start_timer(pin, game.difficulty, self.remaining_seconds.get(pin))
         elif action == "next_question":
             await self.process_answer(
                 db,
@@ -431,6 +464,11 @@ class GameService:
             game.score_b = 0
             game.question_started_at = None
             self.votes[pin] = {}
+            self.question_deadlines.pop(pin, None)
+            self.remaining_seconds.pop(pin, None)
+            task = self.timer_tasks.get(pin)
+            if task and not task.done():
+                task.cancel()
             self.team_stats[pin] = {
                 "A": {"correct": 0, "incorrect": 0, "timeout": 0, "speed_bonus": 0},
                 "B": {"correct": 0, "incorrect": 0, "timeout": 0, "speed_bonus": 0},

@@ -41,7 +41,7 @@
   </script>
 </head>
 
-<body class="min-h-screen relative overflow-hidden
+<body class="h-[100dvh] relative overflow-hidden
              bg-slate-100 dark:bg-slate-950
              text-slate-900 dark:text-slate-100
              transition-colors duration-300"
@@ -54,10 +54,10 @@
   </div>
 </div>
 
-<div class="relative max-w-xl mx-auto px-6 py-12">
+<div class="relative max-w-xl mx-auto px-4 py-4 h-full flex flex-col">
 
   <!-- HEADER -->
-  <div class="flex items-center justify-between mb-14">
+  <div class="flex items-center justify-between mb-4">
 
     <!-- Обернул лого в ссылку, чтобы клик переходил на "/" корректно -->
     <a href="/" title="Перейти на главную" aria-label="Главная — QuizBattle" class="mr-4 inline-block">
@@ -168,6 +168,7 @@
 
           authArea.innerHTML = `
             <div class="flex items-center gap-2">
+              <a href="/rating" class="text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Рейтинг</a>
               <a href="/profile" class="flex items-center gap-2 group" title="${window.qbUser.username}">
                 ${window.qbUser.avatar
                   ? `<img src="${window.qbUser.avatar}" class="w-8 h-8 rounded-full border border-slate-300 dark:border-slate-700 group-hover:scale-105 transition flex-shrink-0">`
@@ -201,12 +202,15 @@
         } else {
 
           authArea.innerHTML = `
-            <a href="/login"
-               class="text-sm px-4 py-2 rounded-xl
-                      border border-slate-300 dark:border-slate-700
-                      hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-              Войти
-            </a>
+            <div class="flex items-center gap-2">
+              <a href="/rating" class="text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Рейтинг</a>
+              <a href="/login"
+                 class="text-sm px-4 py-2 rounded-xl
+                        border border-slate-300 dark:border-slate-700
+                        hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                Войти
+              </a>
+            </div>
           `;
 
         }
@@ -250,7 +254,7 @@
   </script>
 
   <!-- CARD -->
-  <div class="relative rounded-3xl p-8
+  <div class="relative rounded-3xl p-5 flex-1 min-h-0 overflow-y-auto
               bg-white/70 dark:bg-slate-900/70
               backdrop-blur-xl
               border border-white/40 dark:border-slate-800

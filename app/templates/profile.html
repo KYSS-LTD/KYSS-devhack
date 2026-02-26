@@ -77,7 +77,9 @@
     {{ stat("Побед", s.wins, "text-emerald-500") }}
     {{ stat("Winrate", wr ~ "%", "text-indigo-500") }}
     {{ stat("Ср. счёт", s.average_team_score, "text-amber-500") }}
-    {{ stat("Любимая команда", s.favorite_team or "—") }}
+    {% set favorite_label = "Красная (A)" if s.favorite_team == "A" else "Синяя (B)" if s.favorite_team == "B" else "—" %}
+    {% set favorite_color = "text-red-500" if s.favorite_team == "A" else "text-blue-500" if s.favorite_team == "B" else "" %}
+    {{ stat("Любимая команда", favorite_label, favorite_color) }}
 
   </div>
 
