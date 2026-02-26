@@ -41,7 +41,7 @@
   </script>
 </head>
 
-<body class="min-h-screen relative overflow-hidden
+<body class="min-h-screen relative {% block body_overflow_class %}overflow-hidden{% endblock %}
              bg-slate-100 dark:bg-slate-950
              text-slate-900 dark:text-slate-100
              transition-colors duration-300"
@@ -90,6 +90,13 @@
     </a>
 
     <div class="flex items-center gap-3">
+
+      <a href="/rating"
+         title="Рейтинг"
+         aria-label="Перейти на страницу рейтинга"
+         class="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-base">
+        🏆
+      </a>
 
       <!-- Theme toggle -->
       <button id="themeToggle" class="relative flex-shrink-0 w-12 h-6 rounded-full
