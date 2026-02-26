@@ -1,3 +1,13 @@
+"""Модуль сервиса игры, содержащий основную логику игры и управление WebSocket-соединениями.
+
+Этот модуль предоставляет сервисы для управления викторинами, включая:
+- Создание игры и управление её жизненным циклом
+- Управление игроками и балансировку команд
+- Генерацию вопросов и обработку ответов
+- Обработку WebSocket-соединений для общения в реальном времени
+- Отслеживание статистики пользователей
+"""
+
 import asyncio
 import random
 import string
@@ -8,27 +18,57 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Game, Player, Question
-from app.schemas import GameStateOut, PlayerOut, QuestionPublic, TeammateStat, UserProfileStatsResponse
+from app.schemas import (
+    GameStateOut,
+    PlayerOut,
+    QuestionPublic,
+    TeammateStat,
+    UserProfileStatsResponse,
+)
 from app.services.ai_service import generate_questions
 
 QUESTION_TIMEOUT_SECONDS = 30
 
 
 class ConnectionManager:
+    """Управляет WebSocket-соединениями для общения в реальном времени во время игры.
+
+    Обрабатывает подключение, отключение и рассылку сообщений участникам игры.
+    """
+
     def __init__(self) -> None:
+        """Инициализирует менеджер соединений с пустым словарём подключений."""
         self.connections: dict[str, set[WebSocket]] = defaultdict(set)
 
     async def connect(self, game_pin: str, websocket: WebSocket) -> None:
+        """Принимает WebSocket-соединение и добавляет его в пул соединений.
+
+        Args:
+            game_pin: Идентификатор игры, с которым связывается соединение
+            websocket: WebSocket-соединение для принятия и хранения
+        """
         await websocket.accept()
         self.connections[game_pin].add(websocket)
 
     def disconnect(self, game_pin: str, websocket: WebSocket) -> None:
+        """Удаляет WebSocket-соединение из пула соединений.
+
+        Args:
+            game_pin: Идентификатор игры, от которого отсоединяется соединение
+            websocket: WebSocket-соединение для удаления
+        """
         if game_pin in self.connections:
             self.connections[game_pin].discard(websocket)
             if not self.connections[game_pin]:
                 self.connections.pop(game_pin, None)
 
     async def broadcast(self, game_pin: str, payload: dict) -> None:
+        """Отправляет сообщение всем соединениям, связанным с игрой.
+
+        Args:
+            game_pin: Идентификатор игры, в которую производится рассылка
+            payload: Сообщение для отправки всем соединениям
+        """
         sockets = list(self.connections.get(game_pin, set()))
         for ws in sockets:
             try:
@@ -38,25 +78,75 @@ class ConnectionManager:
 
 
 class GameService:
+    """Класс сервиса для управления логикой игры и операциями.
+
+    Обрабатывает создание игры, управление игроками, обработку вопросов
+    и переходы между состояниями игры.
+    """
+
     def __init__(self) -> None:
+        """Инициализирует сервис игры с менеджером соединений и задачами таймера."""
         self.manager = ConnectionManager()
         self.timer_tasks: dict[str, asyncio.Task] = {}
 
     def generate_pin(self, db: Session) -> str:
+        """Генерирует уникальный 6-символьный PIN-код игры.
+
+        Args:
+            db: Сессия базы данных
+
+        Returns:
+            Уникальный 6-символьный строковый PIN-код
+        """
         alphabet = string.ascii_uppercase + string.digits
         while True:
             pin = "".join(random.choices(alphabet, k=6))
-            existing = db.query(Game).filter(Game.pin == pin, Game.status != "finished").first()
+            existing = (
+                db.query(Game)
+                .filter(Game.pin == pin, Game.status != "finished")
+                .first()
+            )
             if not existing:
                 return pin
 
-    def create_game(self, db: Session, host_name: str, topic: str, questions_per_team: int, user_id: int | None) -> tuple[Game, Player]:
+    def create_game(
+        self,
+        db: Session,
+        host_name: str,
+        topic: str,
+        questions_per_team: int,
+        user_id: int | None,
+    ) -> tuple[Game, Player]:
+        """Создаёт новую игру с ведущим-игроком и генерирует вопросы.
+
+        Args:
+            db: Сессия базы данных
+            host_name: Имя ведущего игрока
+            topic: Тема игры для генерации вопросов
+            questions_per_team: Количество вопросов для генерации на команду
+            user_id: Идентификатор пользователя ведущего (может отсутствовать)
+
+        Returns:
+            Кортеж из созданной игры и объекта ведущего игрока
+        """
         pin = self.generate_pin(db)
-        game = Game(pin=pin, topic=topic, questions_per_team=questions_per_team, status="waiting")
+        game = Game(
+            pin=pin,
+            topic=topic,
+            questions_per_team=questions_per_team,
+            status="waiting",
+        )
         db.add(game)
         db.flush()
 
-        host = Player(game_id=game.id, user_id=user_id, name=host_name, team="A", is_host=True, active=True)
+        host = Player(
+            game_id=game.id,
+            user_id=user_id,
+            name=host_name,
+            team="A",
+            is_host=True,
+            active=True,
+        )
         db.add(host)
 
         for team in ("A", "B"):
@@ -82,6 +172,14 @@ class GameService:
         return game, host
 
     def rebalance_teams(self, db: Session, game: Game) -> None:
+        """Перебалансирует команды, случайным образом назначая активных игроков.
+
+        Игроки перемешиваются и поочерёдно назначаются в команды A и B.
+
+        Args:
+            db: Сессия базы данных
+            game: Объект игры, для которого нужно перебалансировать команды
+        """
         players = (
             db.query(Player)
             .filter(Player.game_id == game.id, Player.active.is_(True))
@@ -94,14 +192,37 @@ class GameService:
             player.team = "A" if idx % 2 == 0 else "B"
         db.commit()
 
-    def join_game(self, db: Session, pin: str, name: str, user_id: int | None) -> Player:
+    def join_game(
+        self, db: Session, pin: str, name: str, user_id: int | None
+    ) -> Player:
+        """Добавляет нового игрока в существующую игру.
+
+        Args:
+            db: Сессия базы данных
+            pin: PIN-код игры для входа
+            name: Имя игрока
+            user_id: Идентификатор пользователя (может отсутствовать)
+
+        Returns:
+            Созданный объект игрока
+
+        Raises:
+            HTTPException: Если игра не найдена или уже началась
+        """
         game = db.query(Game).filter(Game.pin == pin).first()
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
         if game.status != "waiting":
             raise HTTPException(status_code=400, detail="Game already started")
 
-        player = Player(game_id=game.id, user_id=user_id, name=name, team="A", is_host=False, active=True)
+        player = Player(
+            game_id=game.id,
+            user_id=user_id,
+            name=name,
+            team="A",
+            is_host=False,
+            active=True,
+        )
         db.add(player)
         db.commit()
         db.refresh(player)
@@ -111,22 +232,58 @@ class GameService:
         return player
 
     def get_game(self, db: Session, pin: str) -> Game:
+        """Получает объект игры по PIN-коду.
+
+        Args:
+            db: Сессия базы данных
+            pin: PIN-код игры
+
+        Returns:
+            Объект игры
+
+        Raises:
+            HTTPException: Если игра не найдена
+        """
         game = db.query(Game).filter(Game.pin == pin).first()
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
         return game
 
     def get_current_question(self, db: Session, game: Game) -> Question | None:
+        """Возвращает текущий вопрос для активной команды, если игра в процессе.
+
+        Args:
+            db: Сессия базы данных
+            game: Объект игры
+
+        Returns:
+            Объект текущего вопроса или None
+        """
         if game.status != "in_progress" or not game.current_team:
             return None
-        index = game.current_index_a if game.current_team == "A" else game.current_index_b
+        index = (
+            game.current_index_a if game.current_team == "A" else game.current_index_b
+        )
         return (
             db.query(Question)
-            .filter(Question.game_id == game.id, Question.team == game.current_team, Question.order_index == index)
+            .filter(
+                Question.game_id == game.id,
+                Question.team == game.current_team,
+                Question.order_index == index,
+            )
             .first()
         )
 
     def to_state(self, db: Session, game: Game) -> GameStateOut:
+        """Преобразует состояние игры в схему для отправки клиентам.
+
+        Args:
+            db: Сессия базы данных
+            game: Объект игры
+
+        Returns:
+            Схема состояния игры
+        """
         players = (
             db.query(Player)
             .filter(Player.game_id == game.id, Player.active.is_(True))
@@ -137,7 +294,11 @@ class GameService:
 
         winner = None
         if game.status == "finished":
-            winner = "A" if game.score_a > game.score_b else "B" if game.score_b > game.score_a else "draw"
+            winner = (
+                "A"
+                if game.score_a > game.score_b
+                else "B" if game.score_b > game.score_a else "draw"
+            )
 
         return GameStateOut(
             pin=game.pin,
@@ -147,20 +308,42 @@ class GameService:
             current_team=game.current_team,
             score_a=game.score_a,
             score_b=game.score_b,
-            current_question=QuestionPublic(
-                id=current_question.id,
-                team=current_question.team,
-                order_index=current_question.order_index,
-                text=current_question.text,
-                options=[current_question.option_1, current_question.option_2, current_question.option_3, current_question.option_4],
-            )
-            if current_question
-            else None,
-            players=[PlayerOut(id=p.id, name=p.name, team=p.team, is_host=p.is_host) for p in players],
+            current_question=(
+                QuestionPublic(
+                    id=current_question.id,
+                    team=current_question.team,
+                    order_index=current_question.order_index,
+                    text=current_question.text,
+                    options=[
+                        current_question.option_1,
+                        current_question.option_2,
+                        current_question.option_3,
+                        current_question.option_4,
+                    ],
+                )
+                if current_question
+                else None
+            ),
+            players=[
+                PlayerOut(id=p.id, name=p.name, team=p.team, is_host=p.is_host)
+                for p in players
+            ],
             winner=winner,
         )
 
-    def get_user_stats(self, db: Session, user_id: int, username: str) -> UserProfileStatsResponse:
+    def get_user_stats(
+        self, db: Session, user_id: int, username: str
+    ) -> UserProfileStatsResponse:
+        """Возвращает статистику пользователя по завершённым играм.
+
+        Args:
+            db: Сессия базы данных
+            user_id: Идентификатор пользователя
+            username: Имя пользователя
+
+        Returns:
+            Статистика профиля пользователя
+        """
         player_rows = db.query(Player).filter(Player.user_id == user_id).all()
         game_ids = sorted({p.game_id for p in player_rows})
         if not game_ids:
@@ -176,7 +359,12 @@ class GameService:
                 frequent_teammates=[],
             )
 
-        games = db.query(Game).filter(Game.id.in_(game_ids)).order_by(Game.created_at.desc()).all()
+        games = (
+            db.query(Game)
+            .filter(Game.id.in_(game_ids))
+            .order_by(Game.created_at.desc())
+            .all()
+        )
         by_game = {p.game_id: p for p in player_rows}
 
         wins = 0
@@ -196,12 +384,18 @@ class GameService:
                 team_scores.append(game.score_b)
             if game.status == "finished":
                 finished += 1
-                if (me.team == "A" and game.score_a > game.score_b) or (me.team == "B" and game.score_b > game.score_a):
+                if (me.team == "A" and game.score_a > game.score_b) or (
+                    me.team == "B" and game.score_b > game.score_a
+                ):
                     wins += 1
 
             teammates = (
                 db.query(Player)
-                .filter(Player.game_id == game.id, Player.id != me.id, Player.team == me.team)
+                .filter(
+                    Player.game_id == game.id,
+                    Player.id != me.id,
+                    Player.team == me.team,
+                )
                 .all()
             )
             for t in teammates:
@@ -209,7 +403,10 @@ class GameService:
 
         games_played = len(game_ids)
         favorite_team = teams.most_common(1)[0][0] if teams else None
-        frequent = [TeammateStat(name=name, games_together=count) for name, count in teammate_counter.most_common(5)]
+        frequent = [
+            TeammateStat(name=name, games_together=count)
+            for name, count in teammate_counter.most_common(5)
+        ]
 
         return UserProfileStatsResponse(
             username=username,
@@ -217,18 +414,49 @@ class GameService:
             games_finished=finished,
             wins=wins,
             win_rate=round((wins / finished * 100.0), 1) if finished else 0.0,
-            average_team_score=round(sum(team_scores) / len(team_scores), 2) if team_scores else 0.0,
+            average_team_score=(
+                round(sum(team_scores) / len(team_scores), 2) if team_scores else 0.0
+            ),
             recent_topics=[g.topic for g in games[:5]],
             favorite_team=favorite_team,
             frequent_teammates=frequent,
         )
 
     async def broadcast_state(self, db: Session, game: Game) -> None:
-        await self.manager.broadcast(game.pin, {"type": "state", "data": self.to_state(db, game).model_dump()})
+        """Отправляет текущее состояние игры всем подключённым клиентам.
+
+        Args:
+            db: Сессия базы данных
+            game: Объект игры
+        """
+        await self.manager.broadcast(
+            game.pin, {"type": "state", "data": self.to_state(db, game).model_dump()}
+        )
 
     async def start_game(self, db: Session, pin: str, host_player_id: int) -> Game:
+        """Запускает игру (переводит в состояние in_progress) и начинает таймер.
+
+        Args:
+            db: Сессия базы данных
+            pin: PIN-код игры
+            host_player_id: Идентификатор игрока-ведущего
+
+        Returns:
+            Обновлённый объект игры
+
+        Raises:
+            HTTPException: Если игрок не является ведущим или игра уже начата
+        """
         game = self.get_game(db, pin)
-        host = db.query(Player).filter(Player.id == host_player_id, Player.game_id == game.id, Player.active.is_(True)).first()
+        host = (
+            db.query(Player)
+            .filter(
+                Player.id == host_player_id,
+                Player.game_id == game.id,
+                Player.active.is_(True),
+            )
+            .first()
+        )
         if not host or not host.is_host:
             raise HTTPException(status_code=403, detail="Only host can start game")
         if game.status != "waiting":
@@ -246,6 +474,14 @@ class GameService:
         return game
 
     async def start_timer(self, _db: Session, pin: str) -> None:
+        """Запускает таймер для текущего вопроса.
+
+        По истечении времени автоматически вызывается process_answer с timeout=True.
+
+        Args:
+            _db: Сессия базы данных (не используется)
+            pin: PIN-код игры
+        """
         existing = self.timer_tasks.get(pin)
         if existing and not existing.done():
             existing.cancel()
@@ -258,7 +494,9 @@ class GameService:
                     game = self.get_game(local_db, pin)
                     if game.status != "in_progress":
                         return
-                    await self.process_answer(local_db, pin, player_id=None, option_index=None, timeout=True)
+                    await self.process_answer(
+                        local_db, pin, player_id=None, option_index=None, timeout=True
+                    )
                 finally:
                     local_db.close()
             except asyncio.CancelledError:
@@ -266,7 +504,26 @@ class GameService:
 
         self.timer_tasks[pin] = asyncio.create_task(timer_coroutine())
 
-    async def process_answer(self, db: Session, pin: str, player_id: int | None, option_index: int | None, timeout: bool = False) -> None:
+    async def process_answer(
+        self,
+        db: Session,
+        pin: str,
+        player_id: int | None,
+        option_index: int | None,
+        timeout: bool = False,
+    ) -> None:
+        """Обрабатывает ответ игрока или тайм-аут, обновляет счёт и состояние игры.
+
+        Args:
+            db: Сессия базы данных
+            pin: PIN-код игры
+            player_id: Идентификатор игрока (None при тайм-ауте)
+            option_index: Номер выбранного варианта (1-4)
+            timeout: Флаг, указывающий, что вызов произошёл по тайм-ауту
+
+        Raises:
+            HTTPException: При неверных данных (не та команда, неверный вариант)
+        """
         game = self.get_game(db, pin)
         if game.status != "in_progress":
             return
@@ -276,7 +533,15 @@ class GameService:
             return
 
         if not timeout:
-            player = db.query(Player).filter(Player.id == player_id, Player.game_id == game.id, Player.active.is_(True)).first()
+            player = (
+                db.query(Player)
+                .filter(
+                    Player.id == player_id,
+                    Player.game_id == game.id,
+                    Player.active.is_(True),
+                )
+                .first()
+            )
             if not player:
                 raise HTTPException(status_code=404, detail="Player not found")
             if player.team != game.current_team:
@@ -299,7 +564,10 @@ class GameService:
             game.current_index_b += 1
             game.current_team = "A"
 
-        if game.current_index_a >= game.questions_per_team and game.current_index_b >= game.questions_per_team:
+        if (
+            game.current_index_a >= game.questions_per_team
+            and game.current_index_b >= game.questions_per_team
+        ):
             game.status = "finished"
             game.current_team = None
 
@@ -325,17 +593,34 @@ class GameService:
             await self.start_timer(db, pin)
 
     async def remove_player(self, db: Session, pin: str, player_id: int) -> None:
+        """Помечает игрока как неактивного (вышел из игры).
+
+        Если не осталось активных игроков, игра завершается.
+
+        Args:
+            db: Сессия базы данных
+            pin: PIN-код игры
+            player_id: Идентификатор игрока
+        """
         game = db.query(Game).filter(Game.pin == pin).first()
         if not game:
             return
-        player = db.query(Player).filter(Player.id == player_id, Player.game_id == game.id).first()
+        player = (
+            db.query(Player)
+            .filter(Player.id == player_id, Player.game_id == game.id)
+            .first()
+        )
         if not player:
             return
 
         player.active = False
         db.commit()
 
-        active_players_left = db.query(Player).filter(Player.game_id == game.id, Player.active.is_(True)).count()
+        active_players_left = (
+            db.query(Player)
+            .filter(Player.game_id == game.id, Player.active.is_(True))
+            .count()
+        )
         if active_players_left == 0:
             game.status = "finished"
             game.current_team = None
