@@ -1,0 +1,13 @@
+.git
+.gitignore
+.idea
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv
+venv
+.env
+quizbattle.db
+new_front

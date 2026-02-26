@@ -1,0 +1,22 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kyss_app
+    restart: unless-stopped
+    expose:
+      - "8000"
+    volumes:
+      - ./quizbattle.db:/app/quizbattle.db
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: kyss_nginx
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/kyss.conf:/etc/nginx/conf.d/default.conf:ro
