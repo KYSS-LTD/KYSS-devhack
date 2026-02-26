@@ -109,49 +109,25 @@ class GameService:
             if not existing:
                 return pin
 
-    def create_game(
-        self,
-        db: Session,
-        host_name: str,
-        topic: str,
-        questions_per_team: int,
-        user_id: int | None,
-    ) -> tuple[Game, Player]:
-        """Создаёт новую игру с ведущим-игроком и генерирует вопросы.
-
-        Args:
-            db: Сессия базы данных
-            host_name: Имя ведущего игрока
-            topic: Тема игры для генерации вопросов
-            questions_per_team: Количество вопросов для генерации на команду
-            user_id: Идентификатор пользователя ведущего (может отсутствовать)
-
-        Returns:
-            Кортеж из созданной игры и объекта ведущего игрока
-        """
+    def create_game(self, db: Session, host_name: str, topic: str, questions_per_team: int, user_id: int | None) -> \
+    tuple[Game, Player]:
         pin = self.generate_pin(db)
-        game = Game(
-            pin=pin,
-            topic=topic,
-            questions_per_team=questions_per_team,
-            status="waiting",
-        )
+        game = Game(pin=pin, topic=topic, questions_per_team=questions_per_team, status="waiting")
         db.add(game)
         db.flush()
 
-        host = Player(
-            game_id=game.id,
-            user_id=user_id,
-            name=host_name,
-            team="A",
-            is_host=True,
-            active=True,
-        )
+        host = Player(game_id=game.id, user_id=user_id, name=host_name, team="A", is_host=True, active=True)
         db.add(host)
 
-        for team in ("A", "B"):
-            generated = generate_questions(topic, questions_per_team)
-            for idx, q in enumerate(generated):
+        # Генерируем все вопросы сразу
+        all_questions = generate_questions(topic, questions_per_team * 2)
+
+        # Разделяем на две половины для каждой команды
+        team_a_questions = all_questions[:questions_per_team]
+        team_b_questions = all_questions[questions_per_team:]
+
+        for team, team_questions in [("A", team_a_questions), ("B", team_b_questions)]:
+            for idx, q in enumerate(team_questions):
                 db.add(
                     Question(
                         game_id=game.id,
