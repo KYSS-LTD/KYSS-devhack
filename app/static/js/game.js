@@ -309,6 +309,8 @@ function renderState(state) {
     answersEl.innerHTML = '';
     timerEl.textContent = '';
     currentQuestionId = null;
+    clearInterval(localTimer);
+    localTimer = null;
     saveResultsBtn.classList.add('hidden');
     restartControlsEl.classList.add('hidden');
     if (me && me.is_host) {
@@ -347,6 +349,7 @@ function renderState(state) {
       turnEl.textContent = 'Игра на паузе';
       answersEl.innerHTML = '';
       clearInterval(localTimer);
+      localTimer = null;
       timerEl.textContent = 'Пауза';
     } else {
       turnEl.textContent = `Сейчас отвечает ${teamName} команда`;
@@ -372,6 +375,7 @@ function renderState(state) {
     hostControlsEl.classList.add('hidden');
     turnEl.textContent = 'Игра завершена';
     clearInterval(localTimer);
+    localTimer = null;
     timerEl.textContent = '';
     answersEl.innerHTML = '';
     saveResultsBtn.classList.remove('hidden');

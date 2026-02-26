@@ -160,9 +160,16 @@ def create_game(payload: CreateGameRequest, request: Request, db: Session = Depe
 
 
 @router.post("/games/{pin}/join", response_model=JoinGameResponse)
-async def join_game(pin: str, payload: JoinGameRequest, request: Request, db: Session = Depends(get_db)):
+async def join_game(
+    pin: str,
+    payload: JoinGameRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user_id_cookie: int | None = Cookie(default=None),
+):
     enforce_rate_limit(request)
-    player = game_service.join_game(db, pin.upper(), payload.name, payload.user_id)
+    effective_user_id = user_id_cookie if user_id_cookie is not None else payload.user_id
+    player = game_service.join_game(db, pin.upper(), payload.name, effective_user_id)
     game = game_service.get_game(db, pin.upper())
     await game_service.broadcast_state(db, game)
     return JoinGameResponse(player_id=player.id, state=game_service.to_state(db, game))

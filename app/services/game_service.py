@@ -91,7 +91,7 @@ class GameService:
 
         # --- ОДИН ЗАПРОС НА ВСЕ КОМАНДЫ ---
         total_count = questions_per_team * 2
-        all_generated = generate_questions(topic, total_count)
+        all_generated = generate_questions(topic, total_count, difficulty=difficulty)
 
         # Перемешиваем, чтобы распределение было случайным
         random.shuffle(all_generated)
@@ -457,7 +457,7 @@ class GameService:
 
             # --- ОДИН ЗАПРОС ПРИ РЕСТАРТЕ ---
             total_count = game.questions_per_team * 2
-            all_generated = generate_questions(game.topic, total_count)
+            all_generated = generate_questions(game.topic, total_count, difficulty=game.difficulty)
             random.shuffle(all_generated)
 
             for i, q_data in enumerate(all_generated):
