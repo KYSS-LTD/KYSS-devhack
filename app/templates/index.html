@@ -194,6 +194,20 @@
         </select>
       </div>
 
+      <div>
+        <label class="block text-sm mb-2 text-slate-500 dark:text-slate-400">Сложность</label>
+        <select id="create-difficulty"
+                class="w-full bg-white dark:bg-slate-800
+                       border border-slate-300 dark:border-slate-700
+                       rounded-xl px-4 py-3
+                       focus:outline-none focus:ring-2 focus:ring-indigo-400/60
+                       dark:focus:ring-indigo-500/60 transition cursor-pointer">
+          <option value="easy">Простой</option>
+          <option value="medium" selected>Средний</option>
+          <option value="hard">Сложный</option>
+        </select>
+      </div>
+
       <button id="createBtn" type="button"
               class="w-full py-3 rounded-xl font-semibold
                      bg-indigo-600 text-white hover:bg-indigo-500
@@ -370,6 +384,7 @@
     const host_name          = getHostName();
     const topic              = document.getElementById('create-topic').value.trim();
     const questions_per_team = Number(document.getElementById('create-qpt').value);
+    const difficulty         = document.getElementById('create-difficulty').value;
 
     if (!host_name)               { showMsg('create-msg', 'Укажите имя ведущего'); return; }
     if (!topic || topic.length < 2) { showMsg('create-msg', 'Введите тему (минимум 2 символа)'); return; }
@@ -379,7 +394,7 @@
       const res = await fetch('/games', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ host_name, topic, questions_per_team, user_id: user?.user_id ?? null }),
+        body: JSON.stringify({ host_name, topic, questions_per_team, difficulty, user_id: user?.user_id ?? null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Ошибка создания игры');
