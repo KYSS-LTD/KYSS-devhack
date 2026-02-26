@@ -4,46 +4,47 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>QuizBattle — Профиль</title>
-  <link rel="stylesheet" href="/static/css/style.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>.muted{color:#64748b;}</style>
 </head>
-<body>
-  <header class="topbar">
-    <h1>Профиль игрока</h1>
-    <div class="top-actions">
-      <a href="/" class="secondary btn-link">Главная</a>
-      <a href="/rating" class="secondary btn-link">Рейтинг</a>
-      <button id="logout-btn" class="secondary">Выйти</button>
-    </div>
-  </header>
+<body class="min-h-screen text-slate-900" style="background: url('/static/imgs/bg_light.png') center/cover no-repeat fixed;">
+  <div class="min-h-screen backdrop-blur-[2px] bg-slate-900/20">
+    <header class="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between gap-3">
+      <h1 class="text-3xl font-black text-white">Профиль</h1>
+      <div class="flex gap-2">
+        <a href="/" class="rounded-xl bg-white/90 px-4 py-2 text-sm font-medium">Главная</a>
+        <a href="/rating" class="rounded-xl bg-white/90 px-4 py-2 text-sm font-medium">Рейтинг</a>
+        <button id="logout-btn" class="rounded-xl bg-rose-600 text-white px-4 py-2 text-sm font-semibold">Выйти</button>
+      </div>
+    </header>
 
-  <main class="game-layout stack">
-    <section class="card">
-      <h2 id="profile-username">...</h2>
-      <p class="muted">Здесь собрана статистика твоих игр.</p>
-    </section>
+    <main class="max-w-6xl mx-auto px-4 pb-10 space-y-6">
+      <section class="rounded-3xl border border-white/40 bg-white/85 backdrop-blur-xl shadow-2xl p-6">
+        <h2 id="profile-username" class="text-2xl font-bold">Игрок</h2>
+        <p id="profile-msg" class="mt-2 text-sm text-rose-700"></p>
+      </section>
 
-    <section class="grid-3">
-      <article class="card"><h3>Сыграно игр</h3><p id="games-played" class="big-number">0</p></article>
-      <article class="card"><h3>Завершено игр</h3><p id="games-finished" class="big-number">0</p></article>
-      <article class="card"><h3>Побед</h3><p id="wins" class="big-number">0</p></article>
-      <article class="card"><h3>Winrate</h3><p id="win-rate" class="big-number">0%</p></article>
-      <article class="card"><h3>Средний счёт команды</h3><p id="avg-score" class="big-number">0</p></article>
-      <article class="card"><h3>Любимая команда</h3><p id="favorite-team" class="big-number">-</p></article>
-    </section>
+      <section class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="rounded-2xl bg-white/85 p-5"><p class="text-xs text-slate-500">Сыграно игр</p><p id="games-played" class="text-3xl font-extrabold">0</p></div>
+        <div class="rounded-2xl bg-white/85 p-5"><p class="text-xs text-slate-500">Завершено</p><p id="games-finished" class="text-3xl font-extrabold">0</p></div>
+        <div class="rounded-2xl bg-white/85 p-5"><p class="text-xs text-slate-500">Побед</p><p id="wins" class="text-3xl font-extrabold">0</p></div>
+        <div class="rounded-2xl bg-white/85 p-5"><p class="text-xs text-slate-500">Процент побед</p><p id="win-rate" class="text-3xl font-extrabold">0%</p></div>
+        <div class="rounded-2xl bg-white/85 p-5"><p class="text-xs text-slate-500">Ср. счёт команды</p><p id="avg-score" class="text-3xl font-extrabold">0</p></div>
+        <div class="rounded-2xl bg-white/85 p-5"><p class="text-xs text-slate-500">Любимая команда</p><p id="favorite-team" class="text-3xl font-extrabold">-</p></div>
+      </section>
 
-    <section class="grid-2">
-      <article class="card">
-        <h3>Последние темы игр</h3>
-        <ul id="recent-topics"></ul>
-      </article>
-      <article class="card">
-        <h3>Чаще всего играл с</h3>
-        <ul id="teammates"></ul>
-      </article>
-    </section>
-
-    <p id="profile-msg" class="status"></p>
-  </main>
+      <section class="grid md:grid-cols-2 gap-4">
+        <div class="rounded-3xl border border-white/40 bg-white/85 backdrop-blur-xl shadow-2xl p-6">
+          <h3 class="text-sm font-semibold text-slate-500 uppercase mb-3">Последние темы</h3>
+          <ul id="recent-topics" class="space-y-2"></ul>
+        </div>
+        <div class="rounded-3xl border border-white/40 bg-white/85 backdrop-blur-xl shadow-2xl p-6">
+          <h3 class="text-sm font-semibold text-slate-500 uppercase mb-3">Чаще всего играл с</h3>
+          <ul id="teammates" class="space-y-2"></ul>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <script src="/static/js/profile.js"></script>
 </body>
