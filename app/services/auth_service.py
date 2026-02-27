@@ -4,29 +4,16 @@
 Обрабатывает регистрацию и вход пользователей в систему.
 """
 
-import hashlib
-
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models import User
+from app.security import hash_password, verify_password
 
 
 class AuthService:
     """Сервис для управления аутентификацией пользователей."""
 
-    @staticmethod
-    def hash_password(password: str) -> str:
-        """
-        Хэширование пароля с использованием SHA256.
-
-        Аргументы:
-            password (str): Пароль в открытом виде
-
-        Возвращает:
-            str: Хэш пароля
-        """
-        return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
     def register(self, db: Session, username: str, password: str) -> User:
         """
@@ -48,7 +35,7 @@ class AuthService:
         if existing:
             raise HTTPException(status_code=400, detail="Имя пользователя уже занято")
         # Создание нового пользователя
-        user = User(username=username, password_hash=self.hash_password(password))
+        user = User(username=username, password_hash=hash_password(password))
         db.add(user)
         db.commit()
         db.refresh(user)
@@ -72,8 +59,19 @@ class AuthService:
         # Поиск пользователя
         user = db.query(User).filter(User.username == username).first()
         # Проверка учетных данных
-        if not user or user.password_hash != self.hash_password(password):
+        if not user:
             raise HTTPException(status_code=401, detail="Неверные учетные данные")
+
+        valid, needs_rehash = verify_password(password, user.password_hash)
+        if not valid:
+            raise HTTPException(status_code=401, detail="Неверные учетные данные")
+
+        if needs_rehash:
+            user.password_hash = hash_password(password)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
         return user
 
 

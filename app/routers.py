@@ -3,7 +3,7 @@
 import time
 from collections import defaultdict, deque
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -27,6 +27,13 @@ from app.schemas import (
 )
 from app.services.auth_service import auth_service
 from app.services.game_service import game_service
+from app.security import (
+    create_player_token,
+    create_user_session_token,
+    get_cookie_settings,
+    verify_player_token,
+    verify_user_session_token,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -60,11 +67,10 @@ def register_page(request: Request):
 
 
 def get_current_user(
-    user_id: int | None = Cookie(default=None),
+    session_token: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
 ) -> User:
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Не аутентифицирован")
+    user_id = verify_user_session_token(session_token)
 
     user = db.query(User).filter(User.id == user_id).first()
 
@@ -115,15 +121,17 @@ def health() -> dict:
 def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     enforce_rate_limit(request)
     user = auth_service.register(db, payload.username.strip(), payload.password)
+    cookie_settings = get_cookie_settings()
 
     response = JSONResponse(
         content=AuthResponse(user_id=user.id, username=user.username).dict()
     )
     response.set_cookie(
-        key="user_id",
-        value=str(user.id),
+        key="session_token",
+        value=create_user_session_token(user.id),
         httponly=True,
-        samesite="lax",
+        secure=cookie_settings.secure,
+        samesite=cookie_settings.samesite,
     )
     return response
 
@@ -132,16 +140,18 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     enforce_rate_limit(request)
     user = auth_service.login(db, payload.username.strip(), payload.password)
+    cookie_settings = get_cookie_settings()
 
     response = JSONResponse(
         content=AuthResponse(user_id=user.id, username=user.username).dict()
     )
 
     response.set_cookie(
-        key="user_id",
-        value=str(user.id),
+        key="session_token",
+        value=create_user_session_token(user.id),
         httponly=True,
-        samesite="lax",
+        secure=cookie_settings.secure,
+        samesite=cookie_settings.samesite,
     )
 
     return response
@@ -152,7 +162,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 @router.post("/auth/logout")
 def logout():
     response = JSONResponse(content={"ok": True})
-    response.delete_cookie("user_id")
+    response.delete_cookie("session_token")
     return response
 
 @router.get("/users/{user_id}/stats", response_model=UserProfileStatsResponse)
@@ -173,8 +183,27 @@ def rating_data(request: Request, db: Session = Depends(get_db)):
 @router.post("/games", response_model=CreateGameResponse)
 def create_game(payload: CreateGameRequest, request: Request, db: Session = Depends(get_db)):
     enforce_rate_limit(request)
-    game, host = game_service.create_game(db, payload.host_name, payload.topic, payload.questions_per_team, payload.user_id, payload.difficulty, payload.pin)
-    return CreateGameResponse(pin=game.pin, host_player_id=host.id, state=game_service.to_state(db, game))
+    session_token = request.cookies.get("session_token")
+    try:
+        effective_user_id = verify_user_session_token(session_token)
+    except HTTPException:
+        effective_user_id = None
+
+    game, host = game_service.create_game(
+        db,
+        payload.host_name,
+        payload.topic,
+        payload.questions_per_team,
+        effective_user_id,
+        payload.difficulty,
+        payload.pin,
+    )
+    return CreateGameResponse(
+        pin=game.pin,
+        host_player_id=host.id,
+        player_token=create_player_token(game.pin, host.id),
+        state=game_service.to_state(db, game),
+    )
 
 
 @router.post("/games/{pin}/join", response_model=JoinGameResponse)
@@ -183,14 +212,21 @@ async def join_game(
     payload: JoinGameRequest,
     request: Request,
     db: Session = Depends(get_db),
-    user_id_cookie: int | None = Cookie(default=None),
+    session_token: str | None = Cookie(default=None),
 ):
     enforce_rate_limit(request)
-    effective_user_id = user_id_cookie if user_id_cookie is not None else payload.user_id
+    try:
+        effective_user_id = verify_user_session_token(session_token)
+    except HTTPException:
+        effective_user_id = None
     player = game_service.join_game(db, pin.upper(), payload.name, effective_user_id)
     game = game_service.get_game(db, pin.upper())
     await game_service.broadcast_state(db, game)
-    return JoinGameResponse(player_id=player.id, state=game_service.to_state(db, game))
+    return JoinGameResponse(
+        player_id=player.id,
+        player_token=create_player_token(pin.upper(), player.id),
+        state=game_service.to_state(db, game),
+    )
 
 
 @router.post("/games/{pin}/start", response_model=GameStateOut)
@@ -208,10 +244,11 @@ def game_state(pin: str, request: Request, db: Session = Depends(get_db)):
 
 
 @router.websocket("/ws/{pin}/{player_id}")
-async def game_socket(websocket: WebSocket, pin: str, player_id: int):
+async def game_socket(websocket: WebSocket, pin: str, player_id: int, token: str | None = Query(default=None)):
     pin = pin.upper()
     db = SessionLocal()
     try:
+        verify_player_token(pin, player_id, token)
         game_service.get_game(db, pin)
         await game_service.manager.connect(pin, websocket)
         await game_service.broadcast_state(db, game_service.get_game(db, pin))
@@ -238,6 +275,8 @@ async def game_socket(websocket: WebSocket, pin: str, player_id: int):
                 )
             elif action == "ping":
                 await websocket.send_json({"type": "pong"})
+    except HTTPException:
+        await websocket.close(code=1008)
     except WebSocketDisconnect:
         pass
     finally:

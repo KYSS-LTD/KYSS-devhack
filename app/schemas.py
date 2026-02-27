@@ -8,7 +8,6 @@ from pydantic import field_validator
 
 SQLI_META_PATTERN = re.compile(r"(;|--|/\*|\*/|\x00)")
 
-
 def _reject_sqli_meta(value: str) -> str:
     cleaned = value.strip()
     if SQLI_META_PATTERN.search(cleaned):
@@ -17,14 +16,14 @@ def _reject_sqli_meta(value: str) -> str:
 
 
 class RegisterRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=50)
+    username: str = Field(min_length=3, max_length=50, pattern=r"^[A-Za-z0-9_\-.]{3,50}$")
     password: str = Field(min_length=6, max_length=128)
 
     _validate_username = field_validator("username")(_reject_sqli_meta)
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=50)
+    username: str = Field(min_length=3, max_length=50, pattern=r"^[A-Za-z0-9_\-.]{3,50}$")
     password: str = Field(min_length=6, max_length=128)
 
     _validate_username = field_validator("username")(_reject_sqli_meta)
@@ -103,11 +102,13 @@ class GameStateOut(BaseModel):
 class CreateGameResponse(BaseModel):
     pin: str
     host_player_id: int
+    player_token: str
     state: GameStateOut
 
 
 class JoinGameResponse(BaseModel):
     player_id: int
+    player_token: str
     state: GameStateOut
 
 

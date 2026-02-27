@@ -227,7 +227,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name,
-            user_id: user?.user_id ?? null
+            user_id: null
           })
         });
 
@@ -240,6 +240,7 @@
         localStorage.setItem('qb_player', JSON.stringify({
           pin,
           player_id: data.player_id,
+          player_token: data.player_token,
           name,
           is_host: false
         }));
@@ -291,7 +292,7 @@
             topic,
             questions_per_team,
             difficulty,
-            user_id: user?.user_id ?? null
+            user_id: null
           })
         });
 
@@ -304,6 +305,7 @@
         localStorage.setItem('qb_player', JSON.stringify({
           pin: data.pin,
           player_id: data.host_player_id,
+          player_token: data.player_token,
           name: host_name,
           is_host: true
         }));
