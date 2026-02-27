@@ -92,6 +92,18 @@ TIMEWEB_TIMEOUT=40
 
 Для Docker можно создать `.env` рядом с `docker-compose.yml`.
 
+### Security env-переменные
+
+Для безопасной эксплуатации в production добавьте:
+
+```bash
+AUTH_SECRET_KEY="long-random-secret"
+SESSION_TTL_SECONDS=1209600
+PASSWORD_HASH_ITERATIONS=200000
+SECURE_COOKIES=true
+CORS_ALLOW_ORIGINS="https://quizbattle.kyssltd.ru"
+```
+
 ---
 
 ## 6) Реализация относительно ТЗ
@@ -175,4 +187,3 @@ README.md
 - Backend, realtime, AI интеграция
 - Frontend/UI
 - DevOps/деплой и инфраструктура
-
