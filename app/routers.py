@@ -3,6 +3,8 @@
 import time
 from collections import defaultdict, deque
 
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -31,6 +33,7 @@ from app.services.game_service import game_service
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 REQUEST_LOGS: dict[str, deque] = defaultdict(deque)
+SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
 
 
 def enforce_rate_limit(request: Request, limit: int = 90, window: int = 60) -> None:
@@ -60,9 +63,10 @@ def register_page(request: Request):
 
 
 def get_current_user(
-    user_id: int | None = Cookie(default=None),
+    session_token: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
 ) -> User:
+    user_id = auth_service.verify_session_token(session_token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Не аутентифицирован")
 
@@ -119,11 +123,13 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     response = JSONResponse(
         content=AuthResponse(user_id=user.id, username=user.username).dict()
     )
+    session_token = auth_service.create_session_token(user.id)
     response.set_cookie(
-        key="user_id",
-        value=str(user.id),
+        key="session_token",
+        value=session_token,
         httponly=True,
         samesite="lax",
+        secure=SECURE_COOKIES,
     )
     return response
 
@@ -136,12 +142,14 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     response = JSONResponse(
         content=AuthResponse(user_id=user.id, username=user.username).dict()
     )
+    session_token = auth_service.create_session_token(user.id)
 
     response.set_cookie(
-        key="user_id",
-        value=str(user.id),
+        key="session_token",
+        value=session_token,
         httponly=True,
         samesite="lax",
+        secure=SECURE_COOKIES,
     )
 
     return response
@@ -152,7 +160,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 @router.post("/auth/logout")
 def logout():
     response = JSONResponse(content={"ok": True})
-    response.delete_cookie("user_id")
+    response.delete_cookie("session_token")
     return response
 
 @router.get("/users/{user_id}/stats", response_model=UserProfileStatsResponse)
@@ -171,9 +179,18 @@ def rating_data(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/games", response_model=CreateGameResponse)
-def create_game(payload: CreateGameRequest, request: Request, db: Session = Depends(get_db)):
+def create_game(
+    payload: CreateGameRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    session_token: str | None = Cookie(default=None),
+):
     enforce_rate_limit(request)
-    game, host = game_service.create_game(db, payload.host_name, payload.topic, payload.questions_per_team, payload.user_id, payload.difficulty, payload.pin)
+    user_id_from_token = auth_service.verify_session_token(session_token)
+    effective_user_id = user_id_from_token if user_id_from_token is not None else payload.user_id
+    if payload.user_id is not None and user_id_from_token is not None and payload.user_id != user_id_from_token:
+        raise HTTPException(status_code=403, detail="Недопустимый контекст пользователя")
+    game, host = game_service.create_game(db, payload.host_name, payload.topic, payload.questions_per_team, effective_user_id, payload.difficulty, payload.pin)
     return CreateGameResponse(pin=game.pin, host_player_id=host.id, state=game_service.to_state(db, game))
 
 
@@ -183,10 +200,13 @@ async def join_game(
     payload: JoinGameRequest,
     request: Request,
     db: Session = Depends(get_db),
-    user_id_cookie: int | None = Cookie(default=None),
+    session_token: str | None = Cookie(default=None),
 ):
     enforce_rate_limit(request)
-    effective_user_id = user_id_cookie if user_id_cookie is not None else payload.user_id
+    user_id_from_token = auth_service.verify_session_token(session_token)
+    effective_user_id = user_id_from_token if user_id_from_token is not None else payload.user_id
+    if payload.user_id is not None and user_id_from_token is not None and payload.user_id != user_id_from_token:
+        raise HTTPException(status_code=403, detail="Недопустимый контекст пользователя")
     player = game_service.join_game(db, pin.upper(), payload.name, effective_user_id)
     game = game_service.get_game(db, pin.upper())
     await game_service.broadcast_state(db, game)
