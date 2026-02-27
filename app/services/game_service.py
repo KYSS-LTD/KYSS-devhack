@@ -88,6 +88,7 @@ class GameService:
         host = Player(game_id=game.id, user_id=user_id, name=host_name, team=None, is_host=True, is_captain=False,
                       active=True)
         db.add(host)
+        db.flush()
 
         # --- ОДИН ЗАПРОС НА ВСЕ КОМАНДЫ ---
         total_count = questions_per_team * 2
@@ -114,10 +115,17 @@ class GameService:
             ))
         # ----------------------------------
 
+        game_id = game.id
+        host_id = host.id
+
         db.commit()
-        db.refresh(game)
-        db.refresh(host)
-        return game, host
+
+        created_game = db.query(Game).filter(Game.id == game_id).first()
+        created_host = db.query(Player).filter(Player.id == host_id).first()
+        if not created_game or not created_host:
+            raise HTTPException(status_code=500, detail="Failed to create game")
+
+        return created_game, created_host
 
     def _assign_teams_and_captains(self, db: Session, game: Game) -> None:
         players = db.query(Player).filter(Player.game_id == game.id, Player.active.is_(True)).order_by(Player.joined_at.asc()).all()
