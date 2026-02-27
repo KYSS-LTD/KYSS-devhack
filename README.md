@@ -1,51 +1,143 @@
-# QuizBattle (FastAPI + WebSockets + SQLite)
+# QuizBattle — KYSS
 
-Полноценный прототип командной квиз-игры по ТЗ: backend на FastAPI, хранение в SQLite, WebSocket-реалтайм и базовый фронтенд (регистрация, вход, лобби, игра).
+QuizBattle — веб-игра для командной викторины в реальном времени: ведущий создаёт комнату, игроки заходят по PIN, делятся на две команды и соревнуются по очкам.
 
-## Реализовано
+- **Команда:** KYSS
+- **Проект:** QuizBattle
+- **Прод-домен:** <https://quizbattle.kyssltd.ru>
 
-- Регистрация и вход пользователей (`/register`, `/login` + API `/auth/*`)
-- Главная страница создания комнаты и входа по PIN
-- Отдельная страница профиля со статистикой игрока (`/profile`)
-- Уникальный PIN (6 символов, буквы + цифры)
-- Хранение игр/игроков/вопросов/пользователей в SQLite
-- Лобби с разделением на 2 команды (A/B)
-- Запуск игры только хостом
-- Поочерёдные ходы команд
-- 4 варианта ответа, подсчёт очков, победитель/ничья
-- Таймер на вопрос (30 секунд)
-- Обновления состояния в реальном времени через WebSocket
-- Удаление игрока из игры при разрыве соединения
-- Генерация вопросов через GigaChat + fallback при недоступности AI
+---
 
-## Запуск (Python 3.12)
+## 1) О проекте
+
+Проект реализует хакатонное ТЗ для игры «QuizBattle»:
+- создание комнаты с темой и количеством вопросов;
+- вход игроков по PIN;
+- лобби с распределением по командам;
+- игровой экран с таймером, вопросами и очками;
+- realtime-обновления через WebSocket;
+- AI-генерация вопросов с fallback на резервные.
+
+---
+
+## 2) Технологии
+
+- **Backend:** FastAPI, SQLAlchemy, Uvicorn
+- **Realtime:** WebSocket
+- **Frontend:** HTML, CSS, JavaScript, Jinja2 templates
+- **AI:** интеграция с AI + резервные вопросы при ошибках
+- **Инфраструктура:** Docker, Docker Compose, Nginx
+
+---
+
+## 3) Запуск локально (без Docker)
+
+### Требования
+- Python 3.12+
+
+### Команды
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Открыть: `http://127.0.0.1:8000`
+Приложение будет доступно на: <http://127.0.0.1:8000>
 
-## ENV для GigaChat
+---
+
+## 4) Запуск в Docker (Nginx + FastAPI)
+
+### Что добавлено
+- `Dockerfile` для приложения
+- `docker-compose.yml` с сервисами:
+  - `app` (FastAPI/Uvicorn)
+  - `nginx` (reverse proxy + WebSocket proxy)
+- `deploy/nginx/default.conf` для проксирования HTTP и WS
+- том `quizbattle_data` для сохранения SQLite базы
+
+### Команды
 
 ```bash
-export GIGACHAT_AUTH_KEY=""
-export GIGACHAT_SCOPE="GIGACHAT_API_PERS"
-export GIGACHAT_MODEL="GigaChat"
-export GIGACHAT_API_BASE="https://gigachat.devices.sberbank.ru/api/v1"
-export GIGACHAT_AUTH_URL="https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
-export GIGACHAT_VERIFY_SSL="false"
+docker compose up -d --build
 ```
 
-Если ключей нет или сервис недоступен, будут использованы запасные вопросы.
+Проверка:
 
-## Основные API
+```bash
+docker compose ps
+curl -I http://127.0.0.1/
+```
+
+Остановка:
+
+```bash
+docker compose down
+```
+
+---
+
+## 5) Переменные окружения (AI)
+
+Если ключи не заданы или AI недоступен, приложение автоматически использует fallback-вопросы.
+
+```bash
+TIMEWEB_API_KEY="enter_your_key"
+TIMEWEB_API_BASE=https://agent.timeweb.cloud/api/v1/cloud-ai/agents/696c108a-b9f3-4c1b-ad84-bf2209a2168f/v1
+TIMEWEB_MODEL=grok-4-fast
+TIMEWEB_TIMEOUT=40
+```
+
+Для Docker можно создать `.env` рядом с `docker-compose.yml`.
+
+---
+
+## 6) Реализация относительно ТЗ
+
+Ниже — статус реализации пунктов из технического задания.
+
+### 6.1 Основной функционал
+
+- ✅ Главная страница: вход по PIN и нику, создание новой игры
+- ✅ При создании: тема вопросов, количество вопросов
+- ✅ Генерация уникального PIN (6 символов, буквы+цифры)
+- ✅ Состояния игры: ожидание / идёт / завершена
+- ✅ Lobby: PIN, список игроков, авто-распределение по 2 командам
+- ✅ Кнопка старта только у ведущего
+- ✅ Одновременный переход игроков в игровой режим (через realtime обновления)
+- ✅ Поочередные вопросы для команд
+- ✅ Отображение, какая команда сейчас отвечает
+- ✅ Таймер вопроса
+- ✅ 4 варианта ответа
+- ✅ Блокировка/обработка действий после финального ответа
+- ✅ Подсчёт очков в реальном времени
+- ✅ Определение победителя/ничьей
+- ✅ Backend на Python (FastAPI)
+- ✅ Realtime на WebSockets
+- ✅ HTML/CSS/JS интерфейс
+- ⚠️ Хранение данных: используется SQLite (в ТЗ базово указана оперативная память, а это не очень стабильно)
+- ✅ Удаление игрока при отключении
+
+### 6.2 Дополнительный функционал (nice to have)
+
+- ✅ AI-генерация вопросов
+- ✅ Fallback-вопросы при ошибках AI
+- ✅ Адаптивность под мобильные устройства
+- ✅ Выбор сложности вопросов
+- ✅ Пауза/возобновление таймера ведущим
+- ✅ Пропуск вопроса
+- ✅ Регистрация и профили пользователей
+- ✅ Рейтинг игроков
+
+---
+
+## 7) Основные маршруты
 
 - `POST /auth/register`
 - `POST /auth/login`
+- `POST /auth/logout`
 - `GET /users/{user_id}/stats`
 - `POST /games`
 - `POST /games/{pin}/join`
@@ -53,24 +145,34 @@ export GIGACHAT_VERIFY_SSL="false"
 - `GET /games/{pin}`
 - `WS /ws/{pin}/{player_id}`
 
-## Структура
+---
+
+## 8) Структура проекта
 
 ```text
 app/
   main.py
-  database.py
-  models.py
-  schemas.py
-  templates/
-    login.html
-    register.html
-    index.html
-    game.html
-    profile.html
-  static/
-    css/style.css
+  routers.py
   services/
-    auth_service.py
     ai_service.py
+    auth_service.py
     game_service.py
+  templates/
+  static/
+deploy/
+  nginx/
+    default.conf
+Dockerfile
+docker-compose.yml
+README.md
 ```
+
+---
+
+## 9) Команда
+
+**KYSS**
+- Backend, realtime, AI интеграция
+- Frontend/UI
+- DevOps/деплой и инфраструктура
+
