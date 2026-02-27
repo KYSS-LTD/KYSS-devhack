@@ -31,6 +31,7 @@ app = FastAPI(
 )
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/sounds", StaticFiles(directory="sounds", check_dir=False), name="sounds")
 
 app.add_middleware(
     CORSMiddleware,

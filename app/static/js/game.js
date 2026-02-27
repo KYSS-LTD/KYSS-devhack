@@ -42,6 +42,58 @@ let leftSeconds = 30;
 let latestState = null;
 let restartPending = false;
 let previousPhase = null;
+let previousStatus = null;
+let audioUnlocked = false;
+
+const sounds = {
+  duringGame: new Audio('/sounds/during_game.mp3'),
+  rightAnswer: new Audio('/sounds/right_answer.mp3'),
+  wrongAnswer: new Audio('/sounds/wrong_aswer.mp3'),
+  gameWin: new Audio('/sounds/game_win.mp3'),
+  gameFail: new Audio('/sounds/game_fail.mp3'),
+};
+
+sounds.duringGame.loop = true;
+sounds.duringGame.volume = 0.45;
+
+function tryPlay(audio) {
+  if (!audio) return;
+  audio.currentTime = 0;
+  audio.play().catch(() => {});
+}
+
+function stopDuringGameSound() {
+  sounds.duringGame.pause();
+  sounds.duringGame.currentTime = 0;
+}
+
+function handleGamePhaseSound(state, me) {
+  const inProgress = state.status === 'in_progress';
+  if (inProgress && state.phase !== 'paused') {
+    sounds.duringGame.play().catch(() => {});
+  } else {
+    stopDuringGameSound();
+  }
+
+  if (state.status === 'finished' && previousStatus !== 'finished') {
+    stopDuringGameSound();
+    if (state.winner && state.winner !== 'draw' && me && me.team) {
+      if (state.winner === me.team) tryPlay(sounds.gameWin);
+      else tryPlay(sounds.gameFail);
+    }
+  }
+}
+
+function unlockAudioIfNeeded() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  Object.values(sounds).forEach((audio) => {
+    audio.play().then(() => {
+      audio.pause();
+      audio.currentTime = 0;
+    }).catch(() => {});
+  });
+}
 
 function wsUrl(path) {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -293,6 +345,7 @@ function renderState(state) {
   scoreA.textContent = state.score_a;
   scoreB.textContent = state.score_b;
   const me = state.players.find((p) => p.id === player.player_id);
+  handleGamePhaseSound(state, me);
 
   renderLobby(state.players);
   const isGameplay = state.status === 'in_progress';
@@ -386,6 +439,8 @@ function renderState(state) {
     qText.textContent = 'Матч окончен.';
     renderResultSummary(state);
   }
+
+  previousStatus = state.status;
 }
 
 startBtn.addEventListener('click', async () => {
@@ -450,6 +505,9 @@ restartBtn.addEventListener('click', () => {
   resultEl.textContent = 'Запускаем новый матч...';
 });
 
+document.addEventListener('click', unlockAudioIfNeeded, { once: true });
+document.addEventListener('touchstart', unlockAudioIfNeeded, { once: true });
+
 function connect() {
   ws = new WebSocket(wsUrl(`/ws/${pin}/${player.player_id}`));
   ws.onmessage = (event) => {
@@ -462,6 +520,11 @@ function connect() {
       if (msg.data.timeout) resultEl.textContent = 'Время вышло';
       else if (msg.data.skip) resultEl.textContent = 'Вопрос пропущен';
       else resultEl.textContent = msg.data.correct ? 'Верно!' : `Неверно. Правильный ответ: ${msg.data.correct_option}`;
+
+      if (!msg.data.timeout && !msg.data.skip) {
+        if (msg.data.correct) tryPlay(sounds.rightAnswer);
+        else tryPlay(sounds.wrongAnswer);
+      }
     }
   };
   ws.onclose = () => {
