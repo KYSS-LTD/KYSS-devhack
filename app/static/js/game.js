@@ -55,6 +55,10 @@ const sounds = {
   gameFail: new Audio('/sounds/game_fail.mp3'),
 };
 
+Object.values(sounds).forEach((audio) => {
+  audio.preload = 'auto';
+});
+
 function playSound(audio) {
   if (!audio) return;
   audio.currentTime = 0;
@@ -66,6 +70,9 @@ function playQuestionStartSound() {
 }
 
 function playAnswerResultSound(data) {
+  sounds.duringGame.pause();
+  sounds.duringGame.currentTime = 0;
+
   if (data && data.correct) {
     playSound(sounds.rightAnswer);
     return;
