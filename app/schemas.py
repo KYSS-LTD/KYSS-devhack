@@ -1,16 +1,33 @@
 """Схемы данных для приложения QuizBattle."""
 
+import re
+
 from pydantic import BaseModel, Field
+from pydantic import field_validator
+
+
+SQLI_META_PATTERN = re.compile(r"(;|--|/\*|\*/|\x00)")
+
+
+def _reject_sqli_meta(value: str) -> str:
+    cleaned = value.strip()
+    if SQLI_META_PATTERN.search(cleaned):
+        raise ValueError("Недопустимые символы во входных данных")
+    return cleaned
 
 
 class RegisterRequest(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     password: str = Field(min_length=6, max_length=128)
 
+    _validate_username = field_validator("username")(_reject_sqli_meta)
+
 
 class LoginRequest(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     password: str = Field(min_length=6, max_length=128)
+
+    _validate_username = field_validator("username")(_reject_sqli_meta)
 
 
 class AuthResponse(BaseModel):
@@ -26,10 +43,15 @@ class CreateGameRequest(BaseModel):
     user_id: int | None = None
     pin: str | None = Field(default=None, min_length=6, max_length=6, pattern="^[A-Za-z0-9]{6}$")
 
+    _validate_host_name = field_validator("host_name")(_reject_sqli_meta)
+    _validate_topic = field_validator("topic")(_reject_sqli_meta)
+
 
 class JoinGameRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     user_id: int | None = None
+
+    _validate_name = field_validator("name")(_reject_sqli_meta)
 
 
 class StartGameRequest(BaseModel):
