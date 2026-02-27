@@ -24,6 +24,7 @@ class CreateGameRequest(BaseModel):
     questions_per_team: int = Field(ge=5, le=7)
     difficulty: str = Field(default="medium", pattern="^(easy|medium|hard)$")
     user_id: int | None = None
+    pin: str | None = Field(default=None, min_length=6, max_length=6, pattern="^[A-Za-z0-9]{6}$")
 
 
 class JoinGameRequest(BaseModel):

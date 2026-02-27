@@ -7,7 +7,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -92,6 +92,14 @@ class Player(Base):
     """
 
     __tablename__ = "players"
+    __table_args__ = (
+        Index(
+            "uq_players_one_host_per_game",
+            "game_id",
+            unique=True,
+            sqlite_where=text("is_host = 1"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     game_id: Mapped[int] = mapped_column(
