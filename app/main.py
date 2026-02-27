@@ -34,12 +34,20 @@ app = FastAPI(
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-cors_origins_env = os.getenv("QUIZBATTLE_CORS_ORIGINS", "http://localhost,http://127.0.0.1")
+cors_origins_env = os.getenv("QUIZBATTLE_CORS_ORIGINS", "")
 allow_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+
+# Для локальной разработки: разрешаем localhost/127.0.0.1 с любым портом.
+# Это закрывает 403 на WebSocket из браузера, где Origin обычно включает порт.
+allow_origin_regex = os.getenv(
+    "QUIZBATTLE_CORS_ORIGIN_REGEX",
+    r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
