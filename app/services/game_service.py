@@ -87,7 +87,7 @@ class GameService:
             .first()
         )
         if duplicate_game:
-            raise HTTPException(status_code=400, detail="Game with this code already exists")
+            raise HTTPException(status_code=400, detail="Игра с таким кодом уже существует")
 
         game = Game(pin=game_pin, topic=topic, questions_per_team=questions_per_team, status="waiting",
                     difficulty=difficulty, phase="gathering")
@@ -132,7 +132,7 @@ class GameService:
         created_game = db.query(Game).filter(Game.id == game_id).first()
         created_host = db.query(Player).filter(Player.id == host_id).first()
         if not created_game or not created_host:
-            raise HTTPException(status_code=500, detail="Failed to create game")
+            raise HTTPException(status_code=500, detail="Не удалось создать игру")
 
         return created_game, created_host
 
@@ -152,9 +152,9 @@ class GameService:
     def join_game(self, db: Session, pin: str, name: str, user_id: int | None) -> Player:
         game = db.query(Game).filter(Game.pin == pin).first()
         if not game:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="Игра не найдена")
         if game.status != "waiting":
-            raise HTTPException(status_code=400, detail="Game already started")
+            raise HTTPException(status_code=400, detail="Игра уже началась")
 
         duplicate_player = None
         if user_id is not None:
@@ -189,7 +189,7 @@ class GameService:
     def get_game(self, db: Session, pin: str) -> Game:
         game = db.query(Game).filter(Game.pin == pin).first()
         if not game:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="Игра не найдена")
         return game
 
     def get_current_question(self, db: Session, game: Game) -> Question | None:
@@ -249,9 +249,9 @@ class GameService:
         game = self.get_game(db, pin)
         host = db.query(Player).filter(Player.id == host_player_id, Player.game_id == game.id, Player.active.is_(True)).first()
         if not host or not host.is_host:
-            raise HTTPException(status_code=403, detail="Only host can start game")
+            raise HTTPException(status_code=403, detail="Только хост может начать игру")
         if game.status != "waiting":
-            raise HTTPException(status_code=400, detail="Game already started")
+            raise HTTPException(status_code=400, detail="Игра уже началась")
 
         players = (
             db.query(Player)
@@ -335,7 +335,7 @@ class GameService:
         frm = db.query(Player).filter(Player.id == from_player_id, Player.game_id == game.id).first()
         to = db.query(Player).filter(Player.id == to_player_id, Player.game_id == game.id).first()
         if not frm or not to or not frm.is_captain or frm.team != to.team:
-            raise HTTPException(status_code=400, detail="Invalid captain transfer")
+            raise HTTPException(status_code=400, detail="Некорректная передача капитанства")
         frm.is_captain = False
         to.is_captain = True
         db.commit()
@@ -360,9 +360,9 @@ class GameService:
         if not timeout and not system_action:
             player = db.query(Player).filter(Player.id == player_id, Player.game_id == game.id, Player.active.is_(True)).first()
             if not player:
-                raise HTTPException(status_code=404, detail="Player not found")
+                raise HTTPException(status_code=404, detail="Игрок не найден")
             if player.team != game.current_team:
-                raise HTTPException(status_code=400, detail="Not your team's turn")
+                raise HTTPException(status_code=400, detail="Сейчас ход не вашей команды")
             if not player.is_captain:
                 raise HTTPException(status_code=400, detail="Только капитан может подтвердить")
 
@@ -428,7 +428,7 @@ class GameService:
         game = self.get_game(db, pin)
         host = db.query(Player).filter(Player.id == host_player_id, Player.game_id == game.id).first()
         if not host or not host.is_host:
-            raise HTTPException(status_code=403, detail="Only host")
+            raise HTTPException(status_code=403, detail="Только хост")
         if action == "pause":
             if game.status == "in_progress" and game.phase == "question":
                 elapsed = 0
@@ -464,7 +464,7 @@ class GameService:
                 target.active = False
         elif action == "restart":
             if game.status != "finished":
-                raise HTTPException(status_code=400, detail="Restart available only after game end")
+                raise HTTPException(status_code=400, detail="Перезапуск доступен только после завершения игры")
             if topic and topic.strip():
                 game.topic = topic.strip()
             if difficulty in {"easy", "medium", "hard"}:

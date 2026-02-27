@@ -40,7 +40,7 @@ def enforce_rate_limit(request: Request, limit: int = 90, window: int = 60) -> N
     while bucket and now - bucket[0] > window:
         bucket.popleft()
     if len(bucket) >= limit:
-        raise HTTPException(status_code=429, detail="Too many requests")
+        raise HTTPException(status_code=429, detail="Слишком много запросов")
     bucket.append(now)
 
 
@@ -64,12 +64,12 @@ def get_current_user(
     db: Session = Depends(get_db),
 ) -> User:
     if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(status_code=401, detail="Не аутентифицирован")
 
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
 
     return user
 
@@ -160,7 +160,7 @@ def user_stats(user_id: int, request: Request, db: Session = Depends(get_db)):
     enforce_rate_limit(request)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
     return game_service.get_user_stats(db, user_id=user.id, username=user.username)
 
 
