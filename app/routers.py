@@ -183,7 +183,7 @@ async def join_game(
     payload: JoinGameRequest,
     request: Request,
     db: Session = Depends(get_db),
-    user_id_cookie: int | None = Cookie(default=None),
+    user_id_cookie: int | None = Cookie(default=None, alias="user_id"),
 ):
     enforce_rate_limit(request)
     effective_user_id = user_id_cookie if user_id_cookie is not None else payload.user_id
@@ -242,4 +242,7 @@ async def game_socket(websocket: WebSocket, pin: str, player_id: int):
         pass
     finally:
         game_service.manager.disconnect(pin, websocket)
-        db.close()
+        try:
+            await game_service.remove_player(db, pin, player_id)
+        finally:
+            db.close()

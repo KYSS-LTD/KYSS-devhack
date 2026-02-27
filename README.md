@@ -1,42 +1,19 @@
 # QuizBattle — KYSS
 
-QuizBattle — веб-игра для командной викторины в реальном времени: ведущий создаёт комнату, игроки заходят по PIN, делятся на две команды и соревнуются по очкам.
+QuizBattle — веб-игра для командной викторины в реальном времени: ведущий создаёт комнату, игроки заходят по PIN, делятся на команды и отвечают на вопросы.
 
 - **Команда:** KYSS
-- **Проект:** QuizBattle
-- **Прод-домен:** <https://quizbattle.kyssltd.ru>
+- **Домен:** <https://quizbattle.kyssltd.ru>
 
----
+## Стек
+- FastAPI + Uvicorn
+- WebSocket realtime
+- HTML/CSS/JS + Jinja2
+- SQLAlchemy + SQLite
+- GigaChat API (с fallback-вопросами)
+- Docker Compose + Nginx + Let's Encrypt
 
-## 1) О проекте
-
-Проект реализует хакатонное ТЗ для игры «QuizBattle»:
-- создание комнаты с темой и количеством вопросов;
-- вход игроков по PIN;
-- лобби с распределением по командам;
-- игровой экран с таймером, вопросами и очками;
-- realtime-обновления через WebSocket;
-- AI-генерация вопросов с fallback на резервные.
-
----
-
-## 2) Технологии
-
-- **Backend:** FastAPI, SQLAlchemy, Uvicorn
-- **Realtime:** WebSocket
-- **Frontend:** HTML, CSS, JavaScript, Jinja2 templates
-- **AI:** интеграция с GigaChat API + резервные вопросы при ошибках
-- **Инфраструктура:** Docker, Docker Compose, Nginx
-
----
-
-## 3) Запуск локально (без Docker)
-
-### Требования
-- Python 3.12+
-
-### Команды
-
+## Локальный запуск
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
@@ -44,45 +21,39 @@ pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Приложение будет доступно на: <http://127.0.0.1:8000>
-
----
-
-## 4) Запуск в Docker (Nginx + FastAPI)
-
-### Что добавлено
-- `Dockerfile` для приложения
-- `docker-compose.yml` с сервисами:
-  - `app` (FastAPI/Uvicorn)
-  - `nginx` (reverse proxy + WebSocket proxy)
-- `deploy/nginx/default.conf` для проксирования HTTP и WS
-- том `quizbattle_data` для сохранения SQLite базы
-
-### Команды
-
+## Docker запуск (app + nginx)
 ```bash
-docker compose up -d --build
+docker compose up -d --build app nginx
 ```
 
-Проверка:
+## SSL автоматизация (Let's Encrypt)
 
+1. Укажите домен и email (можно через `.env`):
 ```bash
-docker compose ps
-curl -I http://127.0.0.1/
+DOMAIN=quizbattle.kyssltd.ru
+EMAIL=admin@kyssltd.ru
 ```
 
-Остановка:
-
+2. Первый выпуск сертификата:
 ```bash
-docker compose down
+./deploy/init-letsencrypt.sh
 ```
 
----
+3. Продление сертификата вручную:
+```bash
+./deploy/renew-letsencrypt.sh
+```
 
-## 5) Переменные окружения (AI)
+Рекомендация: поставить `renew-letsencrypt.sh` в cron/systemd timer (например 2 раза в день).
 
-Если ключи не заданы или AI недоступен, приложение автоматически использует fallback-вопросы.
+## Важные файлы деплоя
+- `Dockerfile`
+- `docker-compose.yml`
+- `deploy/nginx/default.conf.template`
+- `deploy/init-letsencrypt.sh`
+- `deploy/renew-letsencrypt.sh`
 
+## ENV для AI
 ```bash
 GIGACHAT_AUTH_KEY=
 GIGACHAT_SCOPE=GIGACHAT_API_PERS
@@ -92,89 +63,13 @@ GIGACHAT_AUTH_URL=https://ngw.devices.sberbank.ru:9443/api/v2/oauth
 GIGACHAT_VERIFY_SSL=false
 ```
 
-Для Docker можно создать `.env` рядом с `docker-compose.yml`.
+Если AI недоступен, используются резервные вопросы.
 
----
-
-## 6) Реализация относительно ТЗ
-
-Ниже — статус реализации пунктов из технического задания.
-
-### 6.1 Основной функционал
-
-- ✅ Главная страница: вход по PIN и нику, создание новой игры
-- ✅ При создании: тема вопросов, количество вопросов
-- ✅ Генерация уникального PIN (6 символов, буквы+цифры)
-- ✅ Состояния игры: ожидание / идёт / завершена
-- ✅ Lobby: PIN, список игроков, авто-распределение по 2 командам
-- ✅ Кнопка старта только у ведущего
-- ✅ Одновременный переход игроков в игровой режим (через realtime обновления)
-- ✅ Поочередные вопросы для команд
-- ✅ Отображение, какая команда сейчас отвечает
-- ✅ Таймер вопроса
-- ✅ 4 варианта ответа
-- ✅ Блокировка/обработка действий после финального ответа
-- ✅ Подсчёт очков в реальном времени
-- ✅ Определение победителя/ничьей
-- ✅ Backend на Python (FastAPI)
-- ✅ Realtime на WebSockets
-- ✅ HTML/CSS/JS интерфейс
-- ⚠️ Хранение данных: используется SQLite (в ТЗ базово указана оперативная память)
-- ✅ Удаление игрока при отключении
-
-### 6.2 Дополнительный функционал (nice to have)
-
-- ✅ AI-генерация вопросов
-- ✅ Fallback-вопросы при ошибках AI
-- ✅ Адаптивность под мобильные устройства
-- ✅ Выбор сложности вопросов
-- ✅ Пауза/возобновление таймера ведущим
-- ✅ Пропуск вопроса
-- ✅ Регистрация и профили пользователей
-- ✅ Рейтинг игроков
-
----
-
-## 7) Основные маршруты
-
-- `POST /auth/register`
-- `POST /auth/login`
-- `POST /auth/logout`
-- `GET /users/{user_id}/stats`
-- `POST /games`
-- `POST /games/{pin}/join`
-- `POST /games/{pin}/start`
-- `GET /games/{pin}`
-- `WS /ws/{pin}/{player_id}`
-
----
-
-## 8) Структура проекта
-
-```text
-app/
-  main.py
-  routers.py
-  services/
-    ai_service.py
-    auth_service.py
-    game_service.py
-  templates/
-  static/
-deploy/
-  nginx/
-    default.conf
-Dockerfile
-docker-compose.yml
-README.md
-```
-
----
-
-## 9) Команда
-
-**KYSS**
-- Backend, realtime, AI интеграция
-- Frontend/UI
-- DevOps/деплой и инфраструктура
-
+## Соответствие ТЗ (кратко)
+- ✅ Создание/вход в комнату по PIN
+- ✅ Lobby + авторазделение на команды
+- ✅ Realtime-игра с таймером, очками и победителем
+- ✅ WebSocket-коммуникация
+- ✅ AI-вопросы + fallback
+- ✅ Профили/рейтинг/адаптивность/сложность
+- ✅ Docker + Nginx + SSL-автоматизация для домена
