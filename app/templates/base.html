@@ -171,23 +171,27 @@
       // применим UI (позиция точки и фон)
       applyThemeUI();
 
+      const escHtml = (value) => String(value).replace(/[&<>"']/g, (ch) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
+
       /* ===== AUTH AREA ===== */
       const authArea = document.getElementById('authArea');
 
       if (authArea) {
         if (window.qbUser) {
 
-          const initial = (window.qbUser.username || '?')[0].toUpperCase();
+          const safeUsername = escHtml(window.qbUser.username || '');
+          const safeAvatar = escHtml(window.qbUser.avatar || '');
+          const initial = safeUsername ? safeUsername[0].toUpperCase() : '?';
 
           authArea.innerHTML = `
             <div class="flex items-center gap-2">
-              <a href="/profile" class="flex items-center gap-2 group" title="${window.qbUser.username}">
+              <a href="/profile" class="flex items-center gap-2 group" title="${safeUsername}">
                 ${window.qbUser.avatar
-                  ? `<img src="${window.qbUser.avatar}" class="w-8 h-8 rounded-full border border-slate-300 dark:border-slate-700 group-hover:scale-105 transition flex-shrink-0">`
+                  ? `<img src="${safeAvatar}" class="w-8 h-8 rounded-full border border-slate-300 dark:border-slate-700 group-hover:scale-105 transition flex-shrink-0">`
                   : `<div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 group-hover:scale-105 transition">${initial}</div>`
                 }
                 <span class="text-sm font-medium max-w-[80px] truncate hidden sm:block">
-                  ${window.qbUser.username}
+                  ${safeUsername}
                 </span>
               </a>
               <button id="logout-btn"

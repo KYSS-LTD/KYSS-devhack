@@ -120,6 +120,7 @@
 
   <script>
   const user = window.qbUser;
+  const escHtml = (value) => String(value).replace(/[&<>"']/g, (ch) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
 
   /* ===== NAME FIELDS ===== */
 
@@ -134,7 +135,7 @@
     dark:focus:ring-indigo-500/60 transition
   `;
 
-  const defaultName = user?.username ?? '';
+  const defaultName = escHtml(user?.username ?? '');
 
   joinNicknameWrap.innerHTML = `
     <div>

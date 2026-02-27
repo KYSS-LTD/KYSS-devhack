@@ -24,6 +24,7 @@ from app.schemas import (
     RegisterRequest,
     StartGameRequest,
     UserProfileStatsResponse,
+    PIN_RE,
 )
 from app.services.auth_service import auth_service
 from app.services.game_service import game_service
@@ -32,6 +33,14 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 REQUEST_LOGS: dict[str, deque] = defaultdict(deque)
 
+
+
+
+def normalize_and_validate_pin(pin: str) -> str:
+    normalized = pin.strip().upper()
+    if not PIN_RE.fullmatch(normalized):
+        raise HTTPException(status_code=400, detail="Invalid game PIN")
+    return normalized
 
 def enforce_rate_limit(request: Request, limit: int = 90, window: int = 60) -> None:
     ip = request.client.host if request.client else "unknown"
@@ -103,7 +112,8 @@ def rating_page(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/game/{pin}", response_class=HTMLResponse)
 def game_page(request: Request, pin: str):
-    return templates.TemplateResponse("game.html", {"request": request, "pin": pin.upper()})
+    validated_pin = normalize_and_validate_pin(pin)
+    return templates.TemplateResponse("game.html", {"request": request, "pin": validated_pin})
 
 
 @router.get("/health")
@@ -187,8 +197,9 @@ async def join_game(
 ):
     enforce_rate_limit(request)
     effective_user_id = user_id_cookie if user_id_cookie is not None else payload.user_id
-    player = game_service.join_game(db, pin.upper(), payload.name, effective_user_id)
-    game = game_service.get_game(db, pin.upper())
+    validated_pin = normalize_and_validate_pin(pin)
+    player = game_service.join_game(db, validated_pin, payload.name, effective_user_id)
+    game = game_service.get_game(db, validated_pin)
     await game_service.broadcast_state(db, game)
     return JoinGameResponse(player_id=player.id, state=game_service.to_state(db, game))
 
@@ -196,20 +207,22 @@ async def join_game(
 @router.post("/games/{pin}/start", response_model=GameStateOut)
 async def start_game(pin: str, payload: StartGameRequest, request: Request, db: Session = Depends(get_db)):
     enforce_rate_limit(request)
-    game = await game_service.start_game(db, pin.upper(), payload.host_player_id)
+    validated_pin = normalize_and_validate_pin(pin)
+    game = await game_service.start_game(db, validated_pin, payload.host_player_id)
     return game_service.to_state(db, game)
 
 
 @router.get("/games/{pin}", response_model=GameStateOut)
 def game_state(pin: str, request: Request, db: Session = Depends(get_db)):
     enforce_rate_limit(request)
-    game = game_service.get_game(db, pin.upper())
+    validated_pin = normalize_and_validate_pin(pin)
+    game = game_service.get_game(db, validated_pin)
     return game_service.to_state(db, game)
 
 
 @router.websocket("/ws/{pin}/{player_id}")
 async def game_socket(websocket: WebSocket, pin: str, player_id: int):
-    pin = pin.upper()
+    pin = normalize_and_validate_pin(pin)
     db = SessionLocal()
     try:
         game_service.get_game(db, pin)

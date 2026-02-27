@@ -95,6 +95,16 @@ function unlockAudioIfNeeded() {
   });
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  }[ch]));
+}
+
 function wsUrl(path) {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   return `${proto}://${location.host}${path}`;
@@ -137,7 +147,7 @@ function renderLobby(players) {
     const li = document.createElement('li');
     li.className = 'flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0';
     li.innerHTML = `
-      <span>${p.name}${p.is_host ? ' <span class="text-[10px] bg-indigo-100 dark:bg-indigo-900 text-indigo-500 px-1.5 py-0.5 rounded ml-1">HOST</span>' : ''}</span>
+      <span>${escapeHtml(p.name)}${p.is_host ? ' <span class="text-[10px] bg-indigo-100 dark:bg-indigo-900 text-indigo-500 px-1.5 py-0.5 rounded ml-1">HOST</span>' : ''}</span>
       <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
     `;
     lobbyList.appendChild(li);
