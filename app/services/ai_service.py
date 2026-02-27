@@ -96,7 +96,8 @@ class TimewebClient:
                 parsed = json.loads(content)
                 if isinstance(parsed, dict) and "data" in parsed: parsed = parsed["data"]
 
-                questions = self._validate_questions(parsed, total_count, used_texts)
+                local_used = set(used_texts)
+                questions = self._validate_questions(parsed, total_count, local_used)
                 if len(questions) >= total_count:
                     return questions
                 print(f"⚠️ Получено {len(questions)}/{total_count} валидных вопросов, пробую еще раз...")
