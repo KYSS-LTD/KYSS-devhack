@@ -66,6 +66,20 @@ def register_page(request: Request):
     return templates.TemplateResponse("register.html", {"request": request})
 
 
+
+
+def get_optional_authenticated_user_id(session_token: str | None, db: Session) -> int | None:
+    if not session_token:
+        return None
+
+    user_id = verify_user_session_token(session_token)
+    user_exists = db.query(User.id).filter(User.id == user_id).first()
+    if not user_exists:
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+    return user_id
+
+
 def get_current_user(
     session_token: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
@@ -184,10 +198,7 @@ def rating_data(request: Request, db: Session = Depends(get_db)):
 def create_game(payload: CreateGameRequest, request: Request, db: Session = Depends(get_db)):
     enforce_rate_limit(request)
     session_token = request.cookies.get("session_token")
-    try:
-        effective_user_id = verify_user_session_token(session_token)
-    except HTTPException:
-        effective_user_id = None
+    effective_user_id = get_optional_authenticated_user_id(session_token, db)
 
     game, host = game_service.create_game(
         db,
@@ -215,10 +226,7 @@ async def join_game(
     session_token: str | None = Cookie(default=None),
 ):
     enforce_rate_limit(request)
-    try:
-        effective_user_id = verify_user_session_token(session_token)
-    except HTTPException:
-        effective_user_id = None
+    effective_user_id = get_optional_authenticated_user_id(session_token, db)
     player = game_service.join_game(db, pin.upper(), payload.name, effective_user_id)
     game = game_service.get_game(db, pin.upper())
     await game_service.broadcast_state(db, game)

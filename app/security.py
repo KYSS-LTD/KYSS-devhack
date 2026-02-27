@@ -1,14 +1,16 @@
-"""Утилиты безопасности: подпись токенов, хэширование паролей, cookie-настройки."""
+"""Утилиты безопасности: JWT, хэширование паролей, cookie-настройки."""
 
 from __future__ import annotations
 
 import base64
 import hashlib
 import hmac
+import json
 import os
 import secrets
 import time
 from dataclasses import dataclass
+from typing import Any
 
 from fastapi import HTTPException
 
@@ -30,13 +32,51 @@ def _b64d(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + padding)
 
 
-def _sign(payload: str) -> str:
-    sig = hmac.new(_secret_key(), payload.encode("utf-8"), hashlib.sha256).digest()
+def _secure_compare(a: str, b: str) -> bool:
+    return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
+
+
+def _jwt_sign(unsigned_token: str) -> str:
+    sig = hmac.new(_secret_key(), unsigned_token.encode("utf-8"), hashlib.sha256).digest()
     return _b64e(sig)
 
 
-def _secure_compare(a: str, b: str) -> bool:
-    return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
+def _jwt_encode(claims: dict[str, Any]) -> str:
+    header = {"alg": "HS256", "typ": "JWT"}
+    header_b64 = _b64e(json.dumps(header, separators=(",", ":")).encode("utf-8"))
+    payload_b64 = _b64e(json.dumps(claims, separators=(",", ":")).encode("utf-8"))
+    unsigned = f"{header_b64}.{payload_b64}"
+    return f"{unsigned}.{_jwt_sign(unsigned)}"
+
+
+def _jwt_decode(token: str | None) -> dict[str, Any]:
+    if not token:
+        raise HTTPException(status_code=401, detail="Не аутентифицирован")
+
+    try:
+        header_b64, payload_b64, signature = token.split(".", 2)
+        unsigned = f"{header_b64}.{payload_b64}"
+        expected_sig = _jwt_sign(unsigned)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail="Невалидный токен") from exc
+
+    if not _secure_compare(expected_sig, signature):
+        raise HTTPException(status_code=401, detail="Невалидный токен")
+
+    try:
+        header = json.loads(_b64d(header_b64).decode("utf-8"))
+        payload = json.loads(_b64d(payload_b64).decode("utf-8"))
+    except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=401, detail="Невалидный токен") from exc
+
+    if header.get("alg") != "HS256" or header.get("typ") != "JWT":
+        raise HTTPException(status_code=401, detail="Невалидный токен")
+
+    exp = payload.get("exp")
+    if not isinstance(exp, int) or exp < int(time.time()):
+        raise HTTPException(status_code=401, detail="Токен истек")
+
+    return payload
 
 
 @dataclass(frozen=True)
@@ -70,56 +110,53 @@ def verify_password(password: str, password_hash: str) -> tuple[bool, bool]:
         valid = hmac.compare_digest(actual, expected)
         return valid, valid and iterations < PBKDF2_ITERATIONS
 
-    # Legacy sha256 fallback
     legacy = hashlib.sha256(password.encode("utf-8")).hexdigest()
     valid_legacy = hmac.compare_digest(legacy, password_hash)
     return valid_legacy, valid_legacy
 
 
 def create_user_session_token(user_id: int, ttl_seconds: int = 60 * 60 * 24 * 7) -> str:
-    exp = int(time.time()) + ttl_seconds
-    payload = f"u:{user_id}:{exp}"
-    return f"{payload}.{_sign(payload)}"
+    now = int(time.time())
+    claims = {
+        "typ": "session",
+        "sub": str(user_id),
+        "iat": now,
+        "exp": now + ttl_seconds,
+    }
+    return _jwt_encode(claims)
 
 
 def verify_user_session_token(token: str | None) -> int:
-    if not token:
-        raise HTTPException(status_code=401, detail="Не аутентифицирован")
-    try:
-        payload, sig = token.rsplit(".", 1)
-        kind, user_id_raw, exp_raw = payload.split(":", 2)
-    except ValueError as exc:
-        raise HTTPException(status_code=401, detail="Невалидная сессия") from exc
-
-    if kind != "u" or not _secure_compare(_sign(payload), sig):
+    payload = _jwt_decode(token)
+    if payload.get("typ") != "session":
         raise HTTPException(status_code=401, detail="Невалидная сессия")
 
-    if int(exp_raw) < int(time.time()):
-        raise HTTPException(status_code=401, detail="Сессия истекла")
+    sub = payload.get("sub")
+    if not isinstance(sub, str) or not sub.isdigit():
+        raise HTTPException(status_code=401, detail="Невалидная сессия")
 
-    return int(user_id_raw)
+    return int(sub)
 
 
 def create_player_token(pin: str, player_id: int, ttl_seconds: int = 60 * 60 * 8) -> str:
-    exp = int(time.time()) + ttl_seconds
-    payload = f"p:{pin.upper()}:{player_id}:{exp}"
-    return f"{payload}.{_sign(payload)}"
+    now = int(time.time())
+    claims = {
+        "typ": "player",
+        "pin": pin.upper(),
+        "pid": player_id,
+        "iat": now,
+        "exp": now + ttl_seconds,
+    }
+    return _jwt_encode(claims)
 
 
 def verify_player_token(pin: str, player_id: int, token: str | None) -> None:
-    if not token:
-        raise HTTPException(status_code=401, detail="Нужен токен игрока")
-    try:
-        payload, sig = token.rsplit(".", 1)
-        kind, signed_pin, signed_player_id_raw, exp_raw = payload.split(":", 3)
-    except ValueError as exc:
-        raise HTTPException(status_code=401, detail="Невалидный токен игрока") from exc
-
-    if kind != "p" or not _secure_compare(_sign(payload), sig):
+    payload = _jwt_decode(token)
+    if payload.get("typ") != "player":
         raise HTTPException(status_code=401, detail="Невалидный токен игрока")
 
-    if signed_pin != pin.upper() or int(signed_player_id_raw) != player_id:
-        raise HTTPException(status_code=403, detail="Токен игрока не подходит")
+    signed_pin = payload.get("pin")
+    signed_player_id = payload.get("pid")
 
-    if int(exp_raw) < int(time.time()):
-        raise HTTPException(status_code=401, detail="Токен игрока истек")
+    if signed_pin != pin.upper() or not isinstance(signed_player_id, int) or signed_player_id != player_id:
+        raise HTTPException(status_code=403, detail="Токен игрока не подходит")
