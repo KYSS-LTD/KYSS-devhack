@@ -78,9 +78,18 @@ class GameService:
             questions_per_team: int,
             user_id: int | None,
             difficulty: str = "medium",
+            pin: str | None = None,
     ) -> tuple[Game, Player]:
-        pin = self.generate_pin(db)
-        game = Game(pin=pin, topic=topic, questions_per_team=questions_per_team, status="waiting",
+        game_pin = pin.upper() if pin else self.generate_pin(db)
+        duplicate_game = (
+            db.query(Game)
+            .filter(Game.pin == game_pin, Game.status != "finished")
+            .first()
+        )
+        if duplicate_game:
+            raise HTTPException(status_code=400, detail="Game with this code already exists")
+
+        game = Game(pin=game_pin, topic=topic, questions_per_team=questions_per_team, status="waiting",
                     difficulty=difficulty, phase="gathering")
         db.add(game)
         db.flush()

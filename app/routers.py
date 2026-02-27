@@ -173,7 +173,7 @@ def rating_data(request: Request, db: Session = Depends(get_db)):
 @router.post("/games", response_model=CreateGameResponse)
 def create_game(payload: CreateGameRequest, request: Request, db: Session = Depends(get_db)):
     enforce_rate_limit(request)
-    game, host = game_service.create_game(db, payload.host_name, payload.topic, payload.questions_per_team, payload.user_id, payload.difficulty)
+    game, host = game_service.create_game(db, payload.host_name, payload.topic, payload.questions_per_team, payload.user_id, payload.difficulty, payload.pin)
     return CreateGameResponse(pin=game.pin, host_player_id=host.id, state=game_service.to_state(db, game))
 
 
