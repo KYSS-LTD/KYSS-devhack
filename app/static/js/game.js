@@ -2,7 +2,11 @@ const pin = window.QUIZBATTLE_PIN;
 const playerRaw = localStorage.getItem('qb_player');
 if (!playerRaw) window.location.href = '/';
 const player = playerRaw ? JSON.parse(playerRaw) : null;
-if (!player || player.pin !== pin || !player.player_token) window.location.href = '/';
+const hasValidPlayer = Boolean(player && player.pin === pin && player.player_token);
+if (!hasValidPlayer) {
+  localStorage.removeItem('qb_player');
+  window.location.replace('/');
+}
 
 const topicEl = document.getElementById('topic');
 const scoreA = document.getElementById('score-a');
@@ -451,6 +455,7 @@ restartBtn.addEventListener('click', () => {
 });
 
 function connect() {
+  if (!hasValidPlayer) return;
   const wsToken = encodeURIComponent(player.player_token || '');
   ws = new WebSocket(wsUrl(`/ws/${pin}/${player.player_id}?token=${wsToken}`));
   ws.onmessage = (event) => {
