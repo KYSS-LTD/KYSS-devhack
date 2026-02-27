@@ -46,7 +46,7 @@ class AuthService:
         # Проверка существования пользователя
         existing = db.query(User).filter(User.username == username).first()
         if existing:
-            raise HTTPException(status_code=400, detail="Username already exists")
+            raise HTTPException(status_code=400, detail="Имя пользователя уже занято")
         # Создание нового пользователя
         user = User(username=username, password_hash=self.hash_password(password))
         db.add(user)
@@ -73,7 +73,7 @@ class AuthService:
         user = db.query(User).filter(User.username == username).first()
         # Проверка учетных данных
         if not user or user.password_hash != self.hash_password(password):
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            raise HTTPException(status_code=401, detail="Неверные учетные данные")
         return user
 
 
