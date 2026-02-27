@@ -23,7 +23,7 @@ from app.schemas import (
 )
 from app.services.ai_service import generate_questions
 
-BASE_QUESTION_TIMEOUT = {"easy": 35, "medium": 30, "hard": 25}
+BASE_QUESTION_TIMEOUT = {"easy": 25, "medium": 25, "hard": 25}
 
 
 class ConnectionManager:

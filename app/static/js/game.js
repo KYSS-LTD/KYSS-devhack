@@ -56,14 +56,24 @@ const sounds = {
   gameFail: new Audio('/sounds/game_fail.mp3'),
 };
 
+sounds.duringGame.loop = false;
+
 Object.values(sounds).forEach((audio) => {
   audio.preload = 'auto';
+  audio.load();
 });
 
 function playSound(audio) {
   if (!audio) return;
   audio.currentTime = 0;
   audio.play().catch(() => {});
+}
+
+function playEffect(path, fallbackAudio) {
+  const fx = new Audio(path);
+  fx.preload = 'auto';
+  fx.currentTime = 0;
+  fx.play().catch(() => playSound(fallbackAudio));
 }
 
 function stopQuestionSound() {
@@ -80,12 +90,12 @@ function playAnswerResultSound(data) {
   stopQuestionSound();
 
   if (data && data.correct) {
-    playSound(sounds.rightAnswer);
+    playEffect('/sounds/right_answer.mp3', sounds.rightAnswer);
     suppressQuestionSoundUntil = Date.now() + 300;
     return;
   }
 
-  playSound(sounds.wrongAnswer);
+  playEffect('/sounds/wrong_answer.mp3', sounds.wrongAnswer);
   suppressQuestionSoundUntil = Date.now() + 1200;
 }
 
@@ -119,9 +129,9 @@ function startCountdown(seconds) {
   }, 1000);
 }
 
-function startQuestionTimer(seconds = 30) {
+function startQuestionTimer(seconds = 25) {
   clearInterval(localTimer);
-  leftSeconds = Math.max(0, Number(seconds) || 30);
+  leftSeconds = Math.max(0, Number(seconds) || 25);
   timerEl.textContent = leftSeconds > 0 ? `Осталось: ${leftSeconds} сек` : 'Время вышло';
   localTimer = setInterval(() => {
     leftSeconds -= 1;
@@ -423,7 +433,7 @@ function renderState(state) {
         if (currentQuestionId !== state.current_question.id) {
           currentQuestionId = state.current_question.id;
           resultEl.textContent = '';
-          startQuestionTimer(state.question_seconds_left ?? 30);
+          startQuestionTimer(state.question_seconds_left ?? 25);
           playQuestionStartSound();
         } else if ((prevPhase === 'paused' || !localTimer || leftSeconds <= 0) && state.question_seconds_left !== null && state.question_seconds_left !== undefined) {
           startQuestionTimer(state.question_seconds_left);
