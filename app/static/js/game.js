@@ -41,6 +41,7 @@ let localTimer = null;
 let leftSeconds = 30;
 let latestState = null;
 let restartPending = false;
+let previousPhase = null;
 
 function wsUrl(path) {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -67,10 +68,10 @@ function startCountdown(seconds) {
   }, 1000);
 }
 
-function startQuestionTimer() {
+function startQuestionTimer(seconds = 30) {
   clearInterval(localTimer);
-  leftSeconds = 30;
-  timerEl.textContent = `Осталось: ${leftSeconds} сек`;
+  leftSeconds = Math.max(0, Number(seconds) || 30);
+  timerEl.textContent = leftSeconds > 0 ? `Осталось: ${leftSeconds} сек` : 'Время вышло';
   localTimer = setInterval(() => {
     leftSeconds -= 1;
     timerEl.textContent = leftSeconds > 0 ? `Осталось: ${leftSeconds} сек` : 'Время вышло';
@@ -164,53 +165,77 @@ function renderHostControls(players, me, state) {
   kickBtn.disabled = candidates.length === 0;
 }
 
-function renderAnswers(options, canAnswer, canVote) {
+function votePercent(votePercentages, choice) {
+  const value = votePercentages && votePercentages[choice];
+  if (!value) return 0;
+  return Number(value) || 0;
+}
+
+function handleAnswerClick(optionIndex, canAnswer, canVote) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (canAnswer) {
+    ws.send(JSON.stringify({ action: 'answer', option_index: optionIndex }));
+    return;
+  }
+  if (canVote) {
+    ws.send(JSON.stringify({ action: 'vote', choice: String(optionIndex) }));
+  }
+}
+
+function handleSkipClick(canAnswer, canVote) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (canAnswer) {
+    ws.send(JSON.stringify({ action: 'skip' }));
+    return;
+  }
+  if (canVote) {
+    ws.send(JSON.stringify({ action: 'vote', choice: 'skip' }));
+  }
+}
+
+function appendVoteBar(parent, percent) {
+  if (!percent) return;
+  const bar = document.createElement('div');
+  bar.className = 'mb-1 px-3 py-1 rounded-t-lg bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-200 text-xs font-semibold';
+  bar.textContent = `${percent}% — проголосовало`;
+  parent.appendChild(bar);
+}
+
+function renderAnswers(options, canAnswer, canVote, votePercentages) {
   answersEl.innerHTML = '';
+
   options.forEach((option, idx) => {
-    const container = document.createElement('div');
-    container.className = 'grid grid-cols-5 gap-2 mb-2';
+    const choice = String(idx + 1);
+    const percent = votePercent(votePercentages, choice);
 
-    // Кнопка голосования (маленькая слева)
-    const voteBtn = document.createElement('button');
-    voteBtn.className = `col-span-1 py-2 rounded-lg text-xs font-bold transition ${canVote ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-100' : 'bg-slate-50 text-slate-300 cursor-not-allowed'}`;
-    voteBtn.textContent = idx + 1;
-    voteBtn.disabled = !canVote;
-    voteBtn.onclick = () => ws.send(JSON.stringify({ action: 'vote', choice: String(idx + 1) }));
+    const wrap = document.createElement('div');
+    wrap.className = 'mb-2';
 
-    // Кнопка основного ответа (большая)
+    appendVoteBar(wrap, percent);
+
     const answerBtn = document.createElement('button');
-    answerBtn.className = `col-span-4 py-2 px-4 rounded-lg text-sm font-medium text-left transition ${canAnswer ? 'bg-indigo-600 text-white hover:bg-indigo-500 active:scale-[0.98]' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`;
-    answerBtn.textContent = option;
-    answerBtn.disabled = !canAnswer;
-    answerBtn.onclick = () => ws.send(JSON.stringify({ action: 'answer', option_index: idx + 1 }));
+    answerBtn.className = `w-full py-3 px-4 rounded-lg text-sm font-medium text-left transition ${canVote ? 'bg-indigo-600 text-white hover:bg-indigo-500 active:scale-[0.98]' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`;
+    answerBtn.textContent = `${idx + 1}. ${option}`;
+    answerBtn.disabled = !canVote;
+    answerBtn.onclick = () => handleAnswerClick(idx + 1, canAnswer, canVote);
 
-    container.appendChild(voteBtn);
-    container.appendChild(answerBtn);
-    answersEl.appendChild(container);
+    wrap.appendChild(answerBtn);
+    answersEl.appendChild(wrap);
   });
 
-  // Кнопки пропуска
-  const skipContainer = document.createElement('div');
-  skipContainer.className = 'grid grid-cols-5 gap-2 mt-4';
+  const skipPercent = votePercent(votePercentages, 'skip');
+  const skipWrap = document.createElement('div');
+  skipWrap.className = 'mt-4';
+  appendVoteBar(skipWrap, skipPercent);
 
-  const skipVoteBtn = document.createElement('button');
-  skipVoteBtn.className = 'col-span-1 py-2 rounded-lg text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-500 transition uppercase font-bold';
-  skipVoteBtn.textContent = 'Skip';
-  skipVoteBtn.disabled = !canVote;
-  skipVoteBtn.onclick = () => ws.send(JSON.stringify({ action: 'vote', choice: 'skip' }));
+  const skipBtn = document.createElement('button');
+  skipBtn.className = `w-full py-2 rounded-lg text-xs transition ${canVote ? 'border border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-300 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'}`;
+  skipBtn.textContent = canAnswer ? 'Пропустить вопрос (капитан)' : 'Пропустить вопрос';
+  skipBtn.disabled = !canVote;
+  skipBtn.onclick = () => handleSkipClick(canAnswer, canVote);
 
-  if (canAnswer) {
-    const skipBtn = document.createElement('button');
-    skipBtn.className = 'col-span-4 py-2 border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 rounded-lg text-xs hover:bg-red-50 hover:text-red-500 transition';
-    skipBtn.textContent = 'Пропустить вопрос (капитан)';
-    skipBtn.onclick = () => ws.send(JSON.stringify({ action: 'skip' }));
-    skipContainer.appendChild(skipVoteBtn);
-    skipContainer.appendChild(skipBtn);
-    answersEl.appendChild(skipContainer);
-  } else {
-    skipContainer.appendChild(skipVoteBtn);
-    answersEl.appendChild(skipContainer);
-  }
+  skipWrap.appendChild(skipBtn);
+  answersEl.appendChild(skipWrap);
 }
 
 function renderVotes(votePercentages) {
@@ -261,6 +286,8 @@ function renderResultSummary(state) {
 }
 
 function renderState(state) {
+  const prevPhase = previousPhase;
+  previousPhase = state.phase;
   latestState = state;
   topicEl.textContent = `Тема: ${state.topic} (${state.difficulty})`;
   scoreA.textContent = state.score_a;
@@ -285,6 +312,8 @@ function renderState(state) {
     answersEl.innerHTML = '';
     timerEl.textContent = '';
     currentQuestionId = null;
+    clearInterval(localTimer);
+    localTimer = null;
     saveResultsBtn.classList.add('hidden');
     restartControlsEl.classList.add('hidden');
     if (me && me.is_host) {
@@ -322,6 +351,8 @@ function renderState(state) {
     if (state.phase === 'paused') {
       turnEl.textContent = 'Игра на паузе';
       answersEl.innerHTML = '';
+      clearInterval(localTimer);
+      localTimer = null;
       timerEl.textContent = 'Пауза';
     } else {
       turnEl.textContent = `Сейчас отвечает ${teamName} команда`;
@@ -330,11 +361,13 @@ function renderState(state) {
         qText.textContent = state.current_question.text;
         const canVote = me && me.team === state.current_team;
         const canAnswer = canVote && me.is_captain;
-        renderAnswers(state.current_question.options, canAnswer, canVote);
+        renderAnswers(state.current_question.options, canAnswer, canVote, state.vote_percentages);
         if (currentQuestionId !== state.current_question.id) {
           currentQuestionId = state.current_question.id;
           resultEl.textContent = '';
-          startQuestionTimer();
+          startQuestionTimer(state.question_seconds_left ?? 30);
+        } else if ((prevPhase === 'paused' || !localTimer || leftSeconds <= 0) && state.question_seconds_left !== null && state.question_seconds_left !== undefined) {
+          startQuestionTimer(state.question_seconds_left);
         }
       }
     }
@@ -345,6 +378,7 @@ function renderState(state) {
     hostControlsEl.classList.add('hidden');
     turnEl.textContent = 'Игра завершена';
     clearInterval(localTimer);
+    localTimer = null;
     timerEl.textContent = '';
     answersEl.innerHTML = '';
     saveResultsBtn.classList.remove('hidden');

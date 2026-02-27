@@ -74,6 +74,7 @@ class GameStateOut(BaseModel):
     winner: str | None
     team_stats: dict[str, TeamStats]
     vote_percentages: dict[str, int]
+    question_seconds_left: int | None = None
 
 
 class CreateGameResponse(BaseModel):

@@ -2,10 +2,12 @@
 
 {% block title %}Игра {{ pin }}{% endblock %}
 
+{% block body_overflow_class %}overflow-y-auto{% endblock %}
+
 {% block card %}
     <div class="absolute inset-0 rounded-3xl pointer-events-none bg-gradient-to-br from-white/40 to-transparent dark:from-white/5"></div>
 
-    <div class="relative space-y-6">
+    <div class="relative space-y-4 sm:space-y-6">
         <div class="flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-slate-200 dark:border-slate-700 pb-4">
             <div>
                 <h2 class="text-xl font-bold text-slate-800 dark:text-white">Комната <span class="text-indigo-500" id="pin">{{ pin }}</span></h2>
@@ -16,12 +18,12 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-            <div class="bg-red-50 dark:bg-red-900/20 p-3 rounded-2xl text-center border border-red-100 dark:border-red-800/30">
+        <div class="flex gap-3 sm:gap-4">
+            <div class="flex-1 bg-red-50 dark:bg-red-900/20 p-3 rounded-2xl text-center border border-red-100 dark:border-red-800/30">
                 <span class="block text-xs uppercase tracking-wider text-red-500 font-semibold">Красные</span>
                 <span id="score-a" class="text-3xl font-black text-red-600 dark:text-red-400">0</span>
             </div>
-            <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-2xl text-center border border-blue-100 dark:border-blue-800/30">
+            <div class="flex-1 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-2xl text-center border border-blue-100 dark:border-blue-800/30">
                 <span class="block text-xs uppercase tracking-wider text-blue-500 font-semibold">Синие</span>
                 <span id="score-b" class="text-3xl font-black text-blue-600 dark:text-blue-400">0</span>
             </div>
@@ -53,7 +55,7 @@
             <ul id="lobby-list" class="space-y-1 text-sm text-slate-600 dark:text-slate-300"></ul>
         </div>
 
-        <div id="team-section" class="grid grid-cols-2 gap-4 hidden">
+        <div id="team-section" class="grid grid-cols-1 sm:grid-cols-2 gap-4 hidden">
             <div class="space-y-2">
                 <h4 class="text-[10px] font-bold uppercase text-red-400 tracking-widest text-center">Команда А</h4>
                 <ul id="team-a-list" class="text-xs space-y-1"></ul>
@@ -72,18 +74,18 @@
 
             <div id="captain-controls" class="hidden p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 rounded-xl space-y-2">
                 <p class="text-[10px] font-bold text-amber-600 uppercase">Корона капитана</p>
-                <div class="flex gap-2">
-                    <select id="captain-select" class="flex-1 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-xs rounded-lg px-2 py-1 outline-none"></select>
-                    <button id="transfer-captain-btn" class="px-3 py-1 bg-amber-500 text-white text-xs rounded-lg font-semibold hover:bg-amber-600 transition">Передать</button>
+                <div class="flex flex-row gap-2">
+                    <select id="captain-select" class="min-w-0 flex-[2] bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-xs rounded-lg px-2 py-1 outline-none"></select>
+                    <button id="transfer-captain-btn" class="flex-1 px-3 py-1 bg-amber-500 text-white text-xs rounded-lg font-semibold hover:bg-amber-600 transition">Передать</button>
                 </div>
             </div>
 
             <div id="host-controls" class="hidden p-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl space-y-3">
                 <p class="text-[10px] font-bold text-slate-500 uppercase">Панель ведущего</p>
-                <div class="grid grid-cols-3 gap-2">
-                    <button id="pause-btn" class="p-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-xs hover:bg-slate-50 transition">Пауза</button>
-                    <button id="resume-btn" class="p-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-xs hover:bg-slate-50 transition">Пуск</button>
-                    <button id="next-question-btn" class="p-2 bg-indigo-500 text-white rounded-lg text-xs hover:bg-indigo-600 transition">Далее</button>
+                <div class="flex flex-row gap-2">
+                    <button id="pause-btn" class="flex-1 p-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-xs hover:bg-slate-50 transition">Пауза</button>
+                    <button id="resume-btn" class="flex-1 p-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-xs hover:bg-slate-50 transition">Пуск</button>
+                    <button id="next-question-btn" class="flex-none p-2 bg-indigo-500 text-white rounded-lg text-xs hover:bg-indigo-600 transition">Далее</button>
                 </div>
                 <div class="flex gap-2">
                     <select id="kick-player-select" class="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-xs rounded-lg px-2 py-1 outline-none"></select>

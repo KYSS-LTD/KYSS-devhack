@@ -94,6 +94,20 @@
         </select>
       </div>
 
+      <div>
+        <label class="block text-sm mb-2 text-slate-500 dark:text-slate-400">Сложность</label>
+        <select id="create-difficulty"
+                class="w-full bg-white dark:bg-slate-800
+                       border border-slate-300 dark:border-slate-700
+                       rounded-xl px-4 py-3
+                       focus:outline-none focus:ring-2 focus:ring-indigo-400/60
+                       dark:focus:ring-indigo-500/60 transition cursor-pointer">
+          <option value="easy">Простой</option>
+          <option value="medium" selected>Средний</option>
+          <option value="hard">Сложный</option>
+        </select>
+      </div>
+
       <button id="createBtn" type="button"
               class="w-full py-3 rounded-xl font-semibold
                      bg-indigo-600 text-white hover:bg-indigo-500
@@ -120,40 +134,38 @@
     dark:focus:ring-indigo-500/60 transition
   `;
 
-  if (!user) {
-    joinNicknameWrap.innerHTML = `
-      <div>
-        <label class="block text-sm mb-2 text-slate-500 dark:text-slate-400">
-          Никнейм
-        </label>
-        <input id="join-name" type="text"
-               placeholder="Ваш ник"
-               maxlength="80"
-               class="${inputClasses}" />
-      </div>`;
+  const defaultName = user?.username ?? '';
 
-    createHostWrap.innerHTML = `
-      <div>
-        <label class="block text-sm mb-2 text-slate-500 dark:text-slate-400">
-          Имя ведущего
-        </label>
-        <input id="host-name" type="text"
-               placeholder="Ваш ник"
-               maxlength="80"
-               class="${inputClasses}" />
-      </div>`;
-  }
+  joinNicknameWrap.innerHTML = `
+    <div>
+      <label class="block text-sm mb-2 text-slate-500 dark:text-slate-400">
+        Никнейм
+      </label>
+      <input id="join-name" type="text"
+             placeholder="Ваш ник"
+             maxlength="80"
+             value="${defaultName}"
+             class="${inputClasses}" />
+    </div>`;
+
+  createHostWrap.innerHTML = `
+    <div>
+      <label class="block text-sm mb-2 text-slate-500 dark:text-slate-400">
+        Имя ведущего
+      </label>
+      <input id="host-name" type="text"
+             placeholder="Ваш ник"
+             maxlength="80"
+             value="${defaultName}"
+             class="${inputClasses}" />
+    </div>`;
 
   function getJoinName() {
-    return user
-      ? user.username
-      : (document.getElementById('join-name')?.value.trim() ?? '');
+    return document.getElementById('join-name')?.value.trim() ?? '';
   }
 
   function getHostName() {
-    return user
-      ? user.username
-      : (document.getElementById('host-name')?.value.trim() ?? '');
+    return document.getElementById('host-name')?.value.trim() ?? '';
   }
 
 
@@ -255,6 +267,7 @@
                           .value.trim();
       const questions_per_team =
         Number(document.getElementById('create-qpt').value);
+      const difficulty = document.getElementById('create-difficulty').value;
 
       if (!host_name) {
         qb.showMsg('create-msg', 'Укажите имя ведущего');
@@ -277,6 +290,7 @@
             host_name,
             topic,
             questions_per_team,
+            difficulty,
             user_id: user?.user_id ?? null
           })
         });

@@ -61,11 +61,18 @@ class TimewebClient:
 
         return valid
 
-    def generate_batch_questions(self, topic: str, total_count: int, used_texts: set) -> List[dict]:
+    def generate_batch_questions(self, topic: str, total_count: int, used_texts: set, difficulty: str = "medium") -> List[dict]:
         """Генерирует сразу большое количество вопросов одним запросом."""
         # Явный промпт для JSON формата, чтобы нейросеть не ошибалась
+        difficulty_hint = {
+            "easy": "простого уровня: базовые факты и очевидные варианты",
+            "medium": "среднего уровня: нужно базовое понимание темы",
+            "hard": "сложного уровня: больше глубины и нетривиальных формулировок",
+        }.get(difficulty, "среднего уровня")
+
         prompt = (
-            f"Сгенерируй {total_count} уникальных вопросов для викторины по теме '{topic}'. "
+            f"Сгенерируй {total_count} уникальных вопросов для викторины по теме '{topic}' "
+            f"со сложностью '{difficulty}' ({difficulty_hint}). "
             "Ответь строго в формате JSON массива объектов: "
             "[{\"text\": \"...\", \"options\": [\"...\", \"...\", \"...\", \"...\"], \"correct_option\": 1}]. "
             "Нумерация правильного ответа от 1 до 4."
@@ -129,7 +136,7 @@ def get_questions_for_teams(teams: List[str], topic: str, q_per_team: int = 2) -
     return team_assignments
 
 
-def generate_questions(topic: str, count: int, used_texts: set = None) -> List[dict]:
+def generate_questions(topic: str, count: int, used_texts: set = None, difficulty: str = "medium") -> List[dict]:
     """
     Генерирует пачку вопросов за один запрос.
     Используется как совместимый интерфейс для старого кода,
@@ -140,7 +147,7 @@ def generate_questions(topic: str, count: int, used_texts: set = None) -> List[d
 
     client = TimewebClient()
     # Пытаемся получить всё одним махом
-    questions = client.generate_batch_questions(topic, count, used_texts)
+    questions = client.generate_batch_questions(topic, count, used_texts, difficulty=difficulty)
 
     # Если вдруг AI выдал меньше, чем просили, добираем из заглушек
     if len(questions) < count:

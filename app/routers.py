@@ -115,7 +115,17 @@ def health() -> dict:
 def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     enforce_rate_limit(request)
     user = auth_service.register(db, payload.username.strip(), payload.password)
-    return AuthResponse(user_id=user.id, username=user.username)
+
+    response = JSONResponse(
+        content=AuthResponse(user_id=user.id, username=user.username).dict()
+    )
+    response.set_cookie(
+        key="user_id",
+        value=str(user.id),
+        httponly=True,
+        samesite="lax",
+    )
+    return response
 
 
 @router.post("/auth/login", response_model=AuthResponse)
@@ -136,6 +146,14 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 
     return response
 
+
+
+
+@router.post("/auth/logout")
+def logout():
+    response = JSONResponse(content={"ok": True})
+    response.delete_cookie("user_id")
+    return response
 
 @router.get("/users/{user_id}/stats", response_model=UserProfileStatsResponse)
 def user_stats(user_id: int, request: Request, db: Session = Depends(get_db)):
@@ -160,9 +178,16 @@ def create_game(payload: CreateGameRequest, request: Request, db: Session = Depe
 
 
 @router.post("/games/{pin}/join", response_model=JoinGameResponse)
-async def join_game(pin: str, payload: JoinGameRequest, request: Request, db: Session = Depends(get_db)):
+async def join_game(
+    pin: str,
+    payload: JoinGameRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user_id_cookie: int | None = Cookie(default=None),
+):
     enforce_rate_limit(request)
-    player = game_service.join_game(db, pin.upper(), payload.name, payload.user_id)
+    effective_user_id = user_id_cookie if user_id_cookie is not None else payload.user_id
+    player = game_service.join_game(db, pin.upper(), payload.name, effective_user_id)
     game = game_service.get_game(db, pin.upper())
     await game_service.broadcast_state(db, game)
     return JoinGameResponse(player_id=player.id, state=game_service.to_state(db, game))

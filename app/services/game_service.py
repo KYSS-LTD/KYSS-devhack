@@ -4,7 +4,7 @@ import asyncio
 import random
 import string
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, WebSocket
 from sqlalchemy.orm import Session
@@ -60,6 +60,8 @@ class GameService:
                 "B": {"correct": 0, "incorrect": 0, "timeout": 0, "speed_bonus": 0},
             }
         )
+        self.paused_remaining: dict[str, int] = {}
+        self.paused_elapsed: dict[str, int] = {}
 
     def generate_pin(self, db: Session) -> str:
         alphabet = string.ascii_uppercase + string.digits
@@ -89,7 +91,7 @@ class GameService:
 
         # --- ОДИН ЗАПРОС НА ВСЕ КОМАНДЫ ---
         total_count = questions_per_team * 2
-        all_generated = generate_questions(topic, total_count)
+        all_generated = generate_questions(topic, total_count, difficulty=difficulty)
 
         # Перемешиваем, чтобы распределение было случайным
         random.shuffle(all_generated)
@@ -136,6 +138,31 @@ class GameService:
             raise HTTPException(status_code=404, detail="Game not found")
         if game.status != "waiting":
             raise HTTPException(status_code=400, detail="Game already started")
+
+        duplicate_player = None
+        if user_id is not None:
+            duplicate_player = (
+                db.query(Player)
+                .filter(
+                    Player.game_id == game.id,
+                    Player.active.is_(True),
+                    Player.user_id == user_id,
+                )
+                .first()
+            )
+        if duplicate_player is None:
+            duplicate_player = (
+                db.query(Player)
+                .filter(
+                    Player.game_id == game.id,
+                    Player.active.is_(True),
+                    Player.name == name,
+                )
+                .first()
+            )
+        if duplicate_player:
+            raise HTTPException(status_code=400, detail="Вы уже в этой комнате")
+
         player = Player(game_id=game.id, user_id=user_id, name=name, team=None, is_host=False, is_captain=False, active=True)
         db.add(player)
         db.commit()
@@ -165,6 +192,14 @@ class GameService:
     def to_state(self, db: Session, game: Game) -> GameStateOut:
         players = db.query(Player).filter(Player.game_id == game.id, Player.active.is_(True)).order_by(Player.joined_at.asc()).all()
         current_question = self.get_current_question(db, game)
+        question_seconds_left = None
+        if game.status == "in_progress":
+            if game.phase == "question" and game.question_started_at:
+                elapsed = max(0, int((datetime.now(timezone.utc) - game.question_started_at.replace(tzinfo=timezone.utc)).total_seconds()))
+                question_seconds_left = max(0, BASE_QUESTION_TIMEOUT.get(game.difficulty, 30) - elapsed)
+            elif game.phase == "paused":
+                question_seconds_left = self.paused_remaining.get(game.pin)
+
         winner = None
         if game.status == "finished":
             winner = "A" if game.score_a > game.score_b else "B" if game.score_b > game.score_a else "draw"
@@ -187,6 +222,7 @@ class GameService:
                 "B": TeamStats(**self.team_stats[game.pin]["B"]),
             },
             vote_percentages=self._vote_percentages(db, game),
+            question_seconds_left=question_seconds_left,
         )
 
     async def broadcast_state(self, db: Session, game: Game) -> None:
@@ -229,6 +265,9 @@ class GameService:
         db.commit()
         db.refresh(game)
 
+        self.paused_remaining.pop(game.pin, None)
+        self.paused_elapsed.pop(game.pin, None)
+
         for sec in [3, 2, 1]:
             payload = self.to_state(db, game).model_dump()
             payload["countdown_seconds"] = sec
@@ -243,14 +282,15 @@ class GameService:
         await self.start_timer(game.pin, game.difficulty)
         return game
 
-    async def start_timer(self, pin: str, difficulty: str) -> None:
+    async def start_timer(self, pin: str, difficulty: str, remaining_seconds: int | None = None) -> None:
         existing = self.timer_tasks.get(pin)
         if existing and not existing.done():
             existing.cancel()
 
         async def timer_coroutine() -> None:
             try:
-                await asyncio.sleep(BASE_QUESTION_TIMEOUT.get(difficulty, 30))
+                sleep_seconds = remaining_seconds if remaining_seconds is not None else BASE_QUESTION_TIMEOUT.get(difficulty, 30)
+                await asyncio.sleep(max(1, sleep_seconds))
                 local_db = SessionLocal()
                 try:
                     game = self.get_game(local_db, pin)
@@ -340,6 +380,8 @@ class GameService:
             game.current_team = "A"
 
         self.votes[pin] = {}
+        self.paused_remaining.pop(pin, None)
+        self.paused_elapsed.pop(pin, None)
 
         if game.current_index_a >= game.questions_per_team and game.current_index_b >= game.questions_per_team:
             game.status = "finished"
@@ -371,13 +413,24 @@ class GameService:
         if not host or not host.is_host:
             raise HTTPException(status_code=403, detail="Only host")
         if action == "pause":
-            game.phase = "paused"
-            task = self.timer_tasks.get(pin)
-            if task and not task.done():
-                task.cancel()
+            if game.status == "in_progress" and game.phase == "question":
+                elapsed = 0
+                if game.question_started_at:
+                    elapsed = max(0, int((datetime.now(timezone.utc) - game.question_started_at.replace(tzinfo=timezone.utc)).total_seconds()))
+                timeout_seconds = BASE_QUESTION_TIMEOUT.get(game.difficulty, 30)
+                self.paused_elapsed[pin] = elapsed
+                self.paused_remaining[pin] = max(1, timeout_seconds - elapsed)
+                game.phase = "paused"
+                task = self.timer_tasks.get(pin)
+                if task and not task.done():
+                    task.cancel()
         elif action == "resume":
-            game.phase = "question"
-            await self.start_timer(pin, game.difficulty)
+            if game.status == "in_progress" and game.phase == "paused":
+                elapsed_before_pause = self.paused_elapsed.pop(pin, 0)
+                remaining_seconds = self.paused_remaining.pop(pin, None)
+                game.phase = "question"
+                game.question_started_at = datetime.now(timezone.utc) - timedelta(seconds=elapsed_before_pause)
+                await self.start_timer(pin, game.difficulty, remaining_seconds=remaining_seconds)
         elif action == "next_question":
             await self.process_answer(
                 db,
@@ -404,7 +457,7 @@ class GameService:
 
             # --- ОДИН ЗАПРОС ПРИ РЕСТАРТЕ ---
             total_count = game.questions_per_team * 2
-            all_generated = generate_questions(game.topic, total_count)
+            all_generated = generate_questions(game.topic, total_count, difficulty=game.difficulty)
             random.shuffle(all_generated)
 
             for i, q_data in enumerate(all_generated):
