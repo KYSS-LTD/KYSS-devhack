@@ -209,12 +209,25 @@ def create_game(payload: CreateGameRequest, request: Request, db: Session = Depe
         payload.difficulty,
         payload.pin,
     )
-    return CreateGameResponse(
-        pin=game.pin,
-        host_player_id=host.id,
-        player_token=create_player_token(game.pin, host.id),
-        state=game_service.to_state(db, game),
+    player_token = create_player_token(game.pin, host.id)
+    cookie_settings = get_cookie_settings()
+    response = JSONResponse(
+        content=CreateGameResponse(
+            pin=game.pin,
+            host_player_id=host.id,
+            player_token=player_token,
+            state=game_service.to_state(db, game),
+        ).dict()
     )
+    response.set_cookie(
+        key="player_token",
+        value=player_token,
+        httponly=True,
+        secure=cookie_settings.secure,
+        samesite=cookie_settings.samesite,
+        max_age=60 * 60 * 8,
+    )
+    return response
 
 
 @router.post("/games/{pin}/join", response_model=JoinGameResponse)
@@ -230,11 +243,24 @@ async def join_game(
     player = game_service.join_game(db, pin.upper(), payload.name, effective_user_id)
     game = game_service.get_game(db, pin.upper())
     await game_service.broadcast_state(db, game)
-    return JoinGameResponse(
-        player_id=player.id,
-        player_token=create_player_token(pin.upper(), player.id),
-        state=game_service.to_state(db, game),
+    player_token = create_player_token(pin.upper(), player.id)
+    cookie_settings = get_cookie_settings()
+    response = JSONResponse(
+        content=JoinGameResponse(
+            player_id=player.id,
+            player_token=player_token,
+            state=game_service.to_state(db, game),
+        ).dict()
     )
+    response.set_cookie(
+        key="player_token",
+        value=player_token,
+        httponly=True,
+        secure=cookie_settings.secure,
+        samesite=cookie_settings.samesite,
+        max_age=60 * 60 * 8,
+    )
+    return response
 
 
 @router.post("/games/{pin}/start", response_model=GameStateOut)
@@ -256,7 +282,8 @@ async def game_socket(websocket: WebSocket, pin: str, player_id: int, token: str
     pin = pin.upper()
     db = SessionLocal()
     try:
-        verify_player_token(pin, player_id, token)
+        raw_token = token or websocket.query_params.get("player_token") or websocket.cookies.get("player_token")
+        verify_player_token(pin, player_id, raw_token)
         game_service.get_game(db, pin)
         await game_service.manager.connect(pin, websocket)
         await game_service.broadcast_state(db, game_service.get_game(db, pin))
