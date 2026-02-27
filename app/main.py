@@ -33,6 +33,7 @@ app = FastAPI(
 )
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/sounds", StaticFiles(directory="sounds"), name="sounds")
 
 cors_origins_env = os.getenv("QUIZBATTLE_CORS_ORIGINS", "")
 allow_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]

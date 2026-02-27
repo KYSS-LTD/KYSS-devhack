@@ -47,6 +47,37 @@ let latestState = null;
 let restartPending = false;
 let previousPhase = null;
 
+const sounds = {
+  duringGame: new Audio('/sounds/during_game.mp3'),
+  wrongAnswer: new Audio('/sounds/wrong_answer.mp3'),
+  rightAnswer: new Audio('/sounds/right_answer.mp3'),
+  gameWin: new Audio('/sounds/game_win.mp3'),
+  gameFail: new Audio('/sounds/game_fail.mp3'),
+};
+
+function playSound(audio) {
+  if (!audio) return;
+  audio.currentTime = 0;
+  audio.play().catch(() => {});
+}
+
+function playQuestionStartSound() {
+  playSound(sounds.duringGame);
+}
+
+function playAnswerResultSound(data) {
+  if (data && data.correct) {
+    playSound(sounds.rightAnswer);
+    return;
+  }
+  playSound(sounds.wrongAnswer);
+}
+
+function playGameOverSound(state, me) {
+  if (!me || !me.team || state.winner === 'draw') return;
+  playSound(state.winner === me.team ? sounds.gameWin : sounds.gameFail);
+}
+
 function wsUrl(path) {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   return `${proto}://${location.host}${path}`;
@@ -291,6 +322,7 @@ function renderResultSummary(state) {
 
 function renderState(state) {
   const prevPhase = previousPhase;
+  const prevStatus = latestState ? latestState.status : null;
   previousPhase = state.phase;
   latestState = state;
   topicEl.textContent = `Тема: ${state.topic} (${state.difficulty})`;
@@ -370,6 +402,7 @@ function renderState(state) {
           currentQuestionId = state.current_question.id;
           resultEl.textContent = '';
           startQuestionTimer(state.question_seconds_left ?? 30);
+          playQuestionStartSound();
         } else if ((prevPhase === 'paused' || !localTimer || leftSeconds <= 0) && state.question_seconds_left !== null && state.question_seconds_left !== undefined) {
           startQuestionTimer(state.question_seconds_left);
         }
@@ -389,6 +422,9 @@ function renderState(state) {
     if (me && me.is_host) restartControlsEl.classList.remove('hidden');
     qText.textContent = 'Матч окончен.';
     renderResultSummary(state);
+    if (prevStatus !== 'finished') {
+      playGameOverSound(state, me);
+    }
   }
 }
 
@@ -468,6 +504,7 @@ function connect() {
       if (msg.data.timeout) resultEl.textContent = 'Время вышло';
       else if (msg.data.skip) resultEl.textContent = 'Вопрос пропущен';
       else resultEl.textContent = msg.data.correct ? 'Верно!' : `Неверно. Правильный ответ: ${msg.data.correct_option}`;
+      playAnswerResultSound(msg.data);
     }
   };
   ws.onclose = () => {
