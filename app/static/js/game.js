@@ -46,6 +46,7 @@ let leftSeconds = 30;
 let latestState = null;
 let restartPending = false;
 let previousPhase = null;
+let suppressQuestionSoundUntil = 0;
 
 const sounds = {
   duringGame: new Audio('/sounds/during_game.mp3'),
@@ -65,19 +66,27 @@ function playSound(audio) {
   audio.play().catch(() => {});
 }
 
+function stopQuestionSound() {
+  sounds.duringGame.pause();
+  sounds.duringGame.currentTime = 0;
+}
+
 function playQuestionStartSound() {
+  if (Date.now() < suppressQuestionSoundUntil) return;
   playSound(sounds.duringGame);
 }
 
 function playAnswerResultSound(data) {
-  sounds.duringGame.pause();
-  sounds.duringGame.currentTime = 0;
+  stopQuestionSound();
 
   if (data && data.correct) {
     playSound(sounds.rightAnswer);
+    suppressQuestionSoundUntil = Date.now() + 300;
     return;
   }
+
   playSound(sounds.wrongAnswer);
+  suppressQuestionSoundUntil = Date.now() + 1200;
 }
 
 function playGameOverSound(state, me) {
@@ -117,7 +126,10 @@ function startQuestionTimer(seconds = 30) {
   localTimer = setInterval(() => {
     leftSeconds -= 1;
     timerEl.textContent = leftSeconds > 0 ? `Осталось: ${leftSeconds} сек` : 'Время вышло';
-    if (leftSeconds <= 0) clearInterval(localTimer);
+    if (leftSeconds <= 0) {
+      clearInterval(localTimer);
+      stopQuestionSound();
+    }
   }, 1000);
 }
 
@@ -355,6 +367,7 @@ function renderState(state) {
     answersEl.innerHTML = '';
     timerEl.textContent = '';
     currentQuestionId = null;
+    stopQuestionSound();
     clearInterval(localTimer);
     localTimer = null;
     saveResultsBtn.classList.add('hidden');
@@ -382,6 +395,7 @@ function renderState(state) {
     turnEl.textContent = 'Игра запускается...';
     qText.textContent = 'Приготовьтесь!';
     answersEl.innerHTML = '';
+    stopQuestionSound();
     startCountdown(state.countdown_seconds || 3);
   } else if (state.status === 'in_progress') {
     lobbySection.classList.add('hidden');
@@ -394,6 +408,7 @@ function renderState(state) {
     if (state.phase === 'paused') {
       turnEl.textContent = 'Игра на паузе';
       answersEl.innerHTML = '';
+      stopQuestionSound();
       clearInterval(localTimer);
       localTimer = null;
       timerEl.textContent = 'Пауза';
@@ -421,6 +436,7 @@ function renderState(state) {
     captainControlsEl.classList.add('hidden');
     hostControlsEl.classList.add('hidden');
     turnEl.textContent = 'Игра завершена';
+    stopQuestionSound();
     clearInterval(localTimer);
     localTimer = null;
     timerEl.textContent = '';
