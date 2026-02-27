@@ -100,7 +100,6 @@ class GameService:
         for i, q_data in enumerate(all_generated):
             team_label = "A" if i < questions_per_team else "B"
             order_idx = i if team_label == "A" else i - questions_per_team
-            correct_idx = int(q_data["correct_option"]) - 1
 
             db.add(Question(
                 game_id=game.id,
@@ -111,7 +110,7 @@ class GameService:
                 option_2=q_data["options"][1],
                 option_3=q_data["options"][2],
                 option_4=q_data["options"][3],
-                correct_option=correct_idx
+                correct_option=q_data["correct_option"]
             ))
         # ----------------------------------
 
@@ -464,7 +463,6 @@ class GameService:
             for i, q_data in enumerate(all_generated):
                 team_label = "A" if i < game.questions_per_team else "B"
                 order_idx = i if team_label == "A" else i - game.questions_per_team
-                correct_idx = int(q_data["correct_option"]) - 1
 
                 db.add(Question(
                     game_id=game.id,
@@ -475,7 +473,7 @@ class GameService:
                     option_2=q_data["options"][1],
                     option_3=q_data["options"][2],
                     option_4=q_data["options"][3],
-                    correct_option=correct_idx,
+                    correct_option=q_data["correct_option"],
                 ))
 
             game.status = "waiting"
