@@ -25,7 +25,7 @@ QuizBattle — веб-игра для командной викторины в �
 - **Backend:** FastAPI, SQLAlchemy, Uvicorn
 - **Realtime:** WebSocket
 - **Frontend:** HTML, CSS, JavaScript, Jinja2 templates
-- **AI:** интеграция с GigaChat API + резервные вопросы при ошибках
+- **AI:** интеграция с AI + резервные вопросы при ошибках
 - **Инфраструктура:** Docker, Docker Compose, Nginx
 
 ---
@@ -84,12 +84,10 @@ docker compose down
 Если ключи не заданы или AI недоступен, приложение автоматически использует fallback-вопросы.
 
 ```bash
-GIGACHAT_AUTH_KEY=
-GIGACHAT_SCOPE=GIGACHAT_API_PERS
-GIGACHAT_MODEL=GigaChat
-GIGACHAT_API_BASE=https://gigachat.devices.sberbank.ru/api/v1
-GIGACHAT_AUTH_URL=https://ngw.devices.sberbank.ru:9443/api/v2/oauth
-GIGACHAT_VERIFY_SSL=false
+TIMEWEB_API_KEY="enter_your_key"
+TIMEWEB_API_BASE=https://agent.timeweb.cloud/api/v1/cloud-ai/agents/696c108a-b9f3-4c1b-ad84-bf2209a2168f/v1
+TIMEWEB_MODEL=grok-4-fast
+TIMEWEB_TIMEOUT=40
 ```
 
 Для Docker можно создать `.env` рядом с `docker-compose.yml`.
@@ -119,7 +117,7 @@ GIGACHAT_VERIFY_SSL=false
 - ✅ Backend на Python (FastAPI)
 - ✅ Realtime на WebSockets
 - ✅ HTML/CSS/JS интерфейс
-- ⚠️ Хранение данных: используется SQLite (в ТЗ базово указана оперативная память)
+- ⚠️ Хранение данных: используется SQLite (в ТЗ базово указана оперативная память, а это не очень стабильно)
 - ✅ Удаление игрока при отключении
 
 ### 6.2 Дополнительный функционал (nice to have)
