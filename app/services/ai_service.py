@@ -71,17 +71,14 @@ class TimewebClient:
         }.get(difficulty, "среднего уровня")
 
         prompt = (
-            f"Сгенерируй {total_count} уникальных вопросов для викторины по теме '{topic}' "
+            f"Сгенерируй {total_count} уникальных вопросов для викторины по теме '{topic}' ни больше, ни меньше."
             f"со сложностью '{difficulty}' ({difficulty_hint}). "
-            "Ответь строго в формате JSON массива объектов: "
-            "[{\"text\": \"...\", \"options\": [\"...\", \"...\", \"...\", \"...\"], \"correct_option\": 1}]. "
-            "Нумерация правильного ответа от 1 до 4."
         )
 
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         payload = {
             "model": self.model,
-            "temperature": 0.7,  # Чуть выше, чтобы вопросы были разнообразнее
+            "temperature": 0.6,  # Чуть выше, чтобы вопросы были разнообразнее
             "messages": [{"role": "user", "content": prompt}],
         }
 
