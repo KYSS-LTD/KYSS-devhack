@@ -204,7 +204,12 @@
 
           const logoutBtn = document.getElementById('logout-btn');
           if (logoutBtn) {
-            logoutBtn.addEventListener('click', function () {
+            logoutBtn.addEventListener('click', async function () {
+              try {
+                await fetch('/auth/logout', { method: 'POST' });
+              } catch (e) {
+                // ignore network issues on logout cleanup
+              }
               localStorage.removeItem('qb_user');
               localStorage.removeItem('qb_player');
               window.location.href = '/login';

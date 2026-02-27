@@ -115,7 +115,17 @@ def health() -> dict:
 def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     enforce_rate_limit(request)
     user = auth_service.register(db, payload.username.strip(), payload.password)
-    return AuthResponse(user_id=user.id, username=user.username)
+
+    response = JSONResponse(
+        content=AuthResponse(user_id=user.id, username=user.username).dict()
+    )
+    response.set_cookie(
+        key="user_id",
+        value=str(user.id),
+        httponly=True,
+        samesite="lax",
+    )
+    return response
 
 
 @router.post("/auth/login", response_model=AuthResponse)
@@ -136,6 +146,14 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 
     return response
 
+
+
+
+@router.post("/auth/logout")
+def logout():
+    response = JSONResponse(content={"ok": True})
+    response.delete_cookie("user_id")
+    return response
 
 @router.get("/users/{user_id}/stats", response_model=UserProfileStatsResponse)
 def user_stats(user_id: int, request: Request, db: Session = Depends(get_db)):
