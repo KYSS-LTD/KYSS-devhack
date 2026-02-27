@@ -88,10 +88,22 @@ function renderLobby(players) {
   players.forEach((p) => {
     const li = document.createElement('li');
     li.className = 'flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0';
-    li.innerHTML = `
-      <span>${p.name}${p.is_host ? ' <span class="text-[10px] bg-indigo-100 dark:bg-indigo-900 text-indigo-500 px-1.5 py-0.5 rounded ml-1">HOST</span>' : ''}</span>
-      <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
-    `;
+
+    const left = document.createElement('span');
+    left.textContent = p.name;
+
+    if (p.is_host) {
+      const hostBadge = document.createElement('span');
+      hostBadge.className = 'text-[10px] bg-indigo-100 dark:bg-indigo-900 text-indigo-500 px-1.5 py-0.5 rounded ml-1';
+      hostBadge.textContent = 'HOST';
+      left.appendChild(hostBadge);
+    }
+
+    const right = document.createElement('span');
+    right.className = 'w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]';
+
+    li.appendChild(left);
+    li.appendChild(right);
     lobbyList.appendChild(li);
   });
 }

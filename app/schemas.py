@@ -7,12 +7,25 @@ from pydantic import field_validator
 
 
 SQLI_META_PATTERN = re.compile(r"(;|--|/\*|\*/|\x00)")
+UNSAFE_HTML_PATTERN = re.compile(r"[<>]")
 
 def _reject_sqli_meta(value: str) -> str:
     cleaned = value.strip()
     if SQLI_META_PATTERN.search(cleaned):
         raise ValueError("Недопустимые символы во входных данных")
     return cleaned
+
+
+def _reject_html_markup(value: str) -> str:
+    cleaned = value.strip()
+    if UNSAFE_HTML_PATTERN.search(cleaned):
+        raise ValueError("HTML-теги недопустимы")
+    return cleaned
+
+
+def _validate_text_input(value: str) -> str:
+    cleaned = _reject_sqli_meta(value)
+    return _reject_html_markup(cleaned)
 
 
 class RegisterRequest(BaseModel):
@@ -42,15 +55,15 @@ class CreateGameRequest(BaseModel):
     user_id: int | None = None
     pin: str | None = Field(default=None, min_length=6, max_length=6, pattern="^[A-Za-z0-9]{6}$")
 
-    _validate_host_name = field_validator("host_name")(_reject_sqli_meta)
-    _validate_topic = field_validator("topic")(_reject_sqli_meta)
+    _validate_host_name = field_validator("host_name")(_validate_text_input)
+    _validate_topic = field_validator("topic")(_validate_text_input)
 
 
 class JoinGameRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     user_id: int | None = None
 
-    _validate_name = field_validator("name")(_reject_sqli_meta)
+    _validate_name = field_validator("name")(_validate_text_input)
 
 
 class StartGameRequest(BaseModel):
