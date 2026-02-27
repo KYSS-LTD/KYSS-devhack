@@ -42,21 +42,17 @@ const restartBtn = document.getElementById('restart-btn');
 let ws;
 let currentQuestionId = null;
 let localTimer = null;
-let leftSeconds = 30;
+let leftSeconds = 25;
 let latestState = null;
 let restartPending = false;
 let previousPhase = null;
-let suppressQuestionSoundUntil = 0;
 
 const sounds = {
-  duringGame: new Audio('/sounds/during_game.mp3'),
   wrongAnswer: new Audio('/sounds/wrong_answer.mp3'),
   rightAnswer: new Audio('/sounds/right_answer.mp3'),
   gameWin: new Audio('/sounds/game_win.mp3'),
   gameFail: new Audio('/sounds/game_fail.mp3'),
 };
-
-sounds.duringGame.loop = false;
 
 Object.values(sounds).forEach((audio) => {
   audio.preload = 'auto';
@@ -65,38 +61,21 @@ Object.values(sounds).forEach((audio) => {
 
 function playSound(audio) {
   if (!audio) return;
-  audio.currentTime = 0;
-  audio.play().catch(() => {});
-}
-
-function playEffect(path, fallbackAudio) {
-  const fx = new Audio(path);
-  fx.preload = 'auto';
+  const fx = audio.cloneNode(true);
   fx.currentTime = 0;
-  fx.play().catch(() => playSound(fallbackAudio));
-}
-
-function stopQuestionSound() {
-  sounds.duringGame.pause();
-  sounds.duringGame.currentTime = 0;
-}
-
-function playQuestionStartSound() {
-  if (Date.now() < suppressQuestionSoundUntil) return;
-  playSound(sounds.duringGame);
+  fx.play().catch(() => {
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  });
 }
 
 function playAnswerResultSound(data) {
-  stopQuestionSound();
-
   if (data && data.correct) {
-    playEffect('/sounds/right_answer.mp3', sounds.rightAnswer);
-    suppressQuestionSoundUntil = Date.now() + 300;
+    playSound(sounds.rightAnswer);
     return;
   }
 
-  playEffect('/sounds/wrong_answer.mp3', sounds.wrongAnswer);
-  suppressQuestionSoundUntil = Date.now() + 1200;
+  playSound(sounds.wrongAnswer);
 }
 
 function playGameOverSound(state, me) {
@@ -138,7 +117,6 @@ function startQuestionTimer(seconds = 25) {
     timerEl.textContent = leftSeconds > 0 ? `Осталось: ${leftSeconds} сек` : 'Время вышло';
     if (leftSeconds <= 0) {
       clearInterval(localTimer);
-      stopQuestionSound();
     }
   }, 1000);
 }
@@ -377,7 +355,6 @@ function renderState(state) {
     answersEl.innerHTML = '';
     timerEl.textContent = '';
     currentQuestionId = null;
-    stopQuestionSound();
     clearInterval(localTimer);
     localTimer = null;
     saveResultsBtn.classList.add('hidden');
@@ -405,7 +382,6 @@ function renderState(state) {
     turnEl.textContent = 'Игра запускается...';
     qText.textContent = 'Приготовьтесь!';
     answersEl.innerHTML = '';
-    stopQuestionSound();
     startCountdown(state.countdown_seconds || 3);
   } else if (state.status === 'in_progress') {
     lobbySection.classList.add('hidden');
@@ -418,7 +394,6 @@ function renderState(state) {
     if (state.phase === 'paused') {
       turnEl.textContent = 'Игра на паузе';
       answersEl.innerHTML = '';
-      stopQuestionSound();
       clearInterval(localTimer);
       localTimer = null;
       timerEl.textContent = 'Пауза';
@@ -434,7 +409,6 @@ function renderState(state) {
           currentQuestionId = state.current_question.id;
           resultEl.textContent = '';
           startQuestionTimer(state.question_seconds_left ?? 25);
-          playQuestionStartSound();
         } else if ((prevPhase === 'paused' || !localTimer || leftSeconds <= 0) && state.question_seconds_left !== null && state.question_seconds_left !== undefined) {
           startQuestionTimer(state.question_seconds_left);
         }
@@ -446,7 +420,6 @@ function renderState(state) {
     captainControlsEl.classList.add('hidden');
     hostControlsEl.classList.add('hidden');
     turnEl.textContent = 'Игра завершена';
-    stopQuestionSound();
     clearInterval(localTimer);
     localTimer = null;
     timerEl.textContent = '';
